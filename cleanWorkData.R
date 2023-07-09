@@ -1,11 +1,15 @@
-library(dplyr)
-library(tidyr)
-library(data.table)
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(data.table))
+# Suppress summarise info
+options(dplyr.summarise.inform = FALSE)
 
+# mode choice by SA3
 sa3_work_mode <- read.csv("abs/sa3_work_mode.csv") %>%
   select(sa3,age_group="MTWP.Method.of.Travel.to.Work",wfh=WFH,walk=WALK,bike=BIKE,pt=PT,car=CAR) %>%
   fill(sa3)
 
+# distance distribution between SA3 pairs
 sa3_work_dist <- read.csv("abs/sa3_to_sa3_work_distances.csv") %>%
   fill(sa3_home)
 
@@ -38,6 +42,7 @@ ranges_df <- data.frame(range=c(
   75,77,79,82.5,87.5,92.5,97.5,105,115,125,135,145,175    
 ))
 
+# distributes values evenly across narrower ranges. This makes the histograms more even
 expandRange <- function(df,range_min,range_max,source_spacing,target_spacing=1) {
   offset_value <- (source_spacing/2) - (target_spacing/2)
   df %>%
@@ -50,41 +55,42 @@ expandRange <- function(df,range_min,range_max,source_spacing,target_spacing=1) 
     dplyr::select(-offset)
 }
 
+# removing distances that are too large
 sa3_work_dist2 <- sa3_work_dist %>%
-  # filter(sa3_home==20601 & sa3_work==20601) %>%
-  # filter(sa3_home==20601 & sa3_work==21002) %>%
   dplyr::select(-"nil",-"na",-"200-250",-"250-300",-"300-350",-"350-400",-"400-600",
                 -"600-800",-"800-1000",-"1000-3000",-"3000-inf") %>%
   pivot_longer(cols="0-0.5":"150-200",names_to="range",values_to="count") %>%
   left_join(ranges_df, by="range")
 
+# the final work distance histogram with even bin widths and in long format
 sa3_work_dist_hist <- bind_rows(
-  expandRange(sa3_work_dist2,0.25,2.75,0.5,0.5),
-  expandRange(sa3_work_dist2,3.5,29.5,1,0.5),
-  expandRange(sa3_work_dist2,31,79,2,0.5),
-  expandRange(sa3_work_dist2,82.5,97.5,5,0.5),
-  expandRange(sa3_work_dist2,105,145,10,0.5),
+  expandRange(sa3_work_dist2,  0.25,  2.75, 0.5,0.5),
+  expandRange(sa3_work_dist2,  3.5 , 29.5 , 1  ,0.5),
+  expandRange(sa3_work_dist2, 31   , 79   , 2  ,0.5),
+  expandRange(sa3_work_dist2, 82.5 , 97.5 , 5  ,0.5),
+  expandRange(sa3_work_dist2,105   ,145   ,10  ,0.5),
+  expandRange(sa3_work_dist2,175   ,275   ,50  ,0.5)
   # anything above 300km isn't considered
-  expandRange(sa3_work_dist2,175,275,50,0.5)
 ) %>%
   filter(range_value<=140) %>% # no result over 140km
   arrange(sa3_home,sa3_work,range_value) %>%
   select(-range)
-# %>%
-  # pivot_wider(names_from=range_value,values_from=count)
 
+# the distance histogram for the entire study region
 work_hist_global <- sa3_work_dist_hist %>%
   group_by(range_value) %>%
   summarise(count=sum(count,na.rm=T)) %>%
   mutate(pr=count/sum(count,na.rm=T)) %>%
   mutate(pr=ifelse(is.nan(pr),0,pr))
-  
+
+# adding a distance probability for the regional movement
 work_hist_sa3 <- sa3_work_dist_hist %>%
   group_by(sa3_home,sa3_work) %>%
   mutate(pr=count/sum(count,na.rm=T)) %>%
   mutate(pr=ifelse(is.nan(pr),0,pr)) %>%
   ungroup()
 
+# the probability of going from one region to another
 work_sa3_movement <- sa3_work_dist_hist %>%
   group_by(sa3_home,sa3_work) %>%
   summarise(count=sum(count,na.rm=T)) %>%
@@ -95,30 +101,12 @@ work_sa3_movement <- sa3_work_dist_hist %>%
   mutate(pr_global=ifelse(is.nan(pr_global),0,pr_global))
   
 
-# tmp <- work_sa3_movement %>%
-#   group_by(sa3_home) %>%
-#   summarise(pr_sa3=sum(pr_sa3),pr_global=sum(pr_global))
-
+# saving the files
 saveRDS(work_hist_global,"work_hist_global.rds")
 saveRDS(work_hist_sa3,"work_hist_sa3.rds")
 saveRDS(work_sa3_movement,"work_sa3_movement.rds")
 
 
-workers_10pc <- read.csv("~/Projects/matsim-melbourne/demand/output-20220731-10pct/5.locate/plan.csv") %>%
-  group_by(PlanId) %>%
-  filter("Work"%in%Activity) %>%
-  slice(1) %>%
-  ungroup() %>%
-  select(PlanId,SA1_MAINCODE_2016)
-saveRDS(workers_10pc,"workers_10pc.rds")
-
-education_10pc <- read.csv("~/Projects/matsim-melbourne/demand/output-20220731-10pct/5.locate/plan.csv") %>%
-  group_by(PlanId) %>%
-  filter("Study"%in%Activity) %>%
-  slice(1) %>%
-  ungroup() %>%
-  select(PlanId,SA1_MAINCODE_2016)
-saveRDS(education_10pc,"education_10pc.rds")
 
 
 
@@ -127,7 +115,6 @@ workLocationsSA1 <- read.csv(file="data/SA1attributed.csv.gz") %>%
   select(sa1_maincode_2016,global_pr=work) %>%
   filter(!is.na(global_pr))
 workLocationsSA1$sa3 <- as.integer(substr(workLocationsSA1$sa1_maincode_2016,1,5))
-
 workLocationsSA1 <- workLocationsSA1 %>%
   group_by(sa3) %>%
   mutate(sa3_pr=global_pr/sum(global_pr,na.rm=T)) %>%

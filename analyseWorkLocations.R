@@ -37,10 +37,10 @@ workLocationsSA1<-data.table(workLocationsSA1)
 setkey(workLocationsSA1, sa1_maincode_2016)
 sa3DistCounterIndex <<- data.table(sa3=distanceMatrixIndexWork$sa3%>%unique()%>%sort())%>%mutate(index=row_number())
 
-workLocationCounter<-readRDS("workLocationCounter_balanced.rds")
-sa3DistCounter<-readRDS("sa3DistCounter_balanced.rds")
-globalDistCounter<-readRDS("globalDistCounter_balanced.rds")
-workers_sa1<-readRDS("workers_sa1_balanced.rds")
+workLocationCounter<-readRDS("workLocationCounter_balanced1.rds")
+sa3DistCounter<-readRDS("sa3DistCounter_balanced1.rds")
+globalDistCounter<-readRDS("globalDistCounter_balanced1.rds")
+workers_sa1<-readRDS("workers_sa1_balanced1.rds")
 
 # workLocationCounter<-readRDS("workLocationCounter_local.rds")
 # sa3DistCounter<-readRDS("sa3DistCounter_local.rds")
@@ -73,7 +73,7 @@ ggplot(workLocationComparison,aes(x=diff2)) +
     panel.grid.major = element_line(size=0.2),
     panel.grid.minor = element_blank()) +
   labs(x = "Difference in proportion", y="Count")
-ggsave(paste0("work-location-histogram_balanced.pdf"),width=6,height=4)
+ggsave(paste0("work-location-histogram_balanced1.pdf"),width=6,height=4)
 
 
 
@@ -112,7 +112,7 @@ ggplot(globalDistPlot,aes(x=distance,y=proportion)) +
     panel.grid.major = element_line(size=0.2),
     panel.grid.minor = element_blank()) +
   labs(x = "Distance traveled (km)", y="Proportion")
-ggsave(paste0("distance-histogram_balanced.pdf"),width=6,height=4)
+ggsave(paste0("distance-histogram_balanced1.pdf"),width=6,height=4)
 
 # 
 # tmp<-sa3DistCounter[1:3,1:3,]
@@ -160,4 +160,4 @@ ggplot(plot1, aes(x=pr_expected, y=pr_actual)) +
   scale_fill_viridis_c(option = "plasma", na.value = "lightgrey") +
   scale_x_continuous(labels=scales::percent_format(accuracy=1)) +
   scale_y_continuous(labels=scales::percent_format(accuracy=1)) 
-ggsave(paste0("sa3_dist_balanced-qq.pdf"), width=10, height=8, units = "in")
+ggsave(paste0("sa3_dist_balanced-qq1.pdf"), width=10, height=8, units = "in")
