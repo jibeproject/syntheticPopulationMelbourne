@@ -6,7 +6,7 @@ options(dplyr.summarise.inform = FALSE)
 # load general purpose utility functions
 source("util.R")
 
-outputDir="output"
+outputDir="output/test"
 
 dir.create(paste0('../',outputDir), showWarnings = FALSE, recursive=TRUE)
 
@@ -14,7 +14,7 @@ dir.create(paste0('../',outputDir), showWarnings = FALSE, recursive=TRUE)
 
 # collates the population into a single table, adding in household ids
 source('collatePopulation.R', local=TRUE); 
-collatePopulation(
+collate2016Population(
   outputDir
 )
 
@@ -38,9 +38,21 @@ assignWorkLocations(
   outputDir
 )
 
-# add in extra census data
+# add in additional variables from census data
+# 1. add education level (education level is define as high, medium, low, based on paper doi: 10.1093/ije/dyab080 and ASCED - ISCED2011 Level Correspondence Table)
+source('determineEducationLevel.R', local=TRUE); 
+determineEducationLevel(
+  outputDir
+)
 
-# add in home and work coordinates based on sa1 region
+# 2. add household number of cars 
+source('determineHouseholdCar.R', local=TRUE); 
+determineHouseholdCar(
+  outputDir
+)
+
+
+
 
 # reformat to match Manchester data
 

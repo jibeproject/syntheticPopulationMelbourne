@@ -4,24 +4,7 @@ suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(igraph))
 
-collateMelbourne2016Population <- function(outputDir, plansFile=NA) {
-  # df=persons_cleaned
-  
-  importPersons <- function(persons_csv_gz, sa1s = NULL) {
-    #sampleSize<-10 #for testing purposes
-    #infile<-"data/melbourne-2016-population.zip.dir/melbourne/generated/SA2/Abbotsford/population/persons.csv.gz"
-    infile<-persons_csv_gz
-    
-    # read in the population
-    gz1<-gzfile(infile, 'rt')
-    all_persons<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T )
-    close(gz1)
-    
-    # if we're restricting to a subset of nodes
-    if (!is.null(sa1s)) all<-all%>%filter(SA1_7DIGCODE%in%sa1s)
-    
-    return(all_persons)
-  }
+collate2016Population <- function(outputDir, plansFile=NA) {
   
   # read in the list of SA1s we want to keep
   sa1s <- NULL
@@ -62,6 +45,21 @@ collateMelbourne2016Population <- function(outputDir, plansFile=NA) {
 
 }
 
+importPersons <- function(persons_csv_gz, sa1s = NULL) {
+  sampleSize<-10 #for testing purposes
+  #infile<-"data/melbourne-2016-population.zip/melbourne/generated/SA2/Abbotsford/population/persons.csv.gz"
+  infile<-persons_csv_gz
+  
+  # read in the population
+  gz1<-gzfile(infile, 'rt')
+  all_persons<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T )
+  close(gz1)
+  
+  # if we're restricting to a subset of nodes
+  if (!is.null(sa1s)) all<-all%>%filter(SA1_7DIGCODE%in%sa1s)
+  
+  return(all_persons)
+}
 
 reorderColumns <- function(df) {
   # df <- df_children %>% dplyr::select(x=AgentId,y=ChildrenIds)
