@@ -4,15 +4,16 @@ Code for generating the synthetic population for Melbourne
 ```mermaid
 flowchart TD
     subgraph makeExamplePopulation.R
-        direction LR 
-        collatePopulation.R --> determineEmployed.R --> prepWorkData.R --> assignWorkLocations.R
+        direction TB 
+        collatePopulation.R -->
+        determineEmployed.R -->
+        prepWorkData.R -->
+        assignWorkLocations.R -->
+        determineEducationLevel.R -->
+        determineHouseholdCar.R
     end
-    makeExamplePopulation.R<-- imports ---Util.R
-    makeExamplePopulation.R --> analyseWorkLocations.R
-    subgraph "Unused code":
-        direction LR
-        assignWorkLocationsOld.R
-        cleanWorkData.R
-        importPopulation.R
-    end
+    Util.R--imported by-->makeExamplePopulation.R
+    makeExamplePopulation.R -->
+    C@{ shape: docs, label: "output files"} -->
+    analyseWorkLocations.R
 ```
