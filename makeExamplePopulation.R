@@ -18,6 +18,19 @@ population <- collate2016Population()
 source('determineEmployed.R', local=TRUE); 
 population <- determineEmployed(population)
 
+# assigns a work SA1 location for those that work.
+# takes about 2 days to run for the entire population
+#might want to run this one interactively
+source('assignWorkLocations.R', local=TRUE); 
+
+# Run assignWorkLocations asynchronously
+future_assignWorkLocations <- future({
+  assignWorkLocations(
+    outputDir,
+    population
+  )
+})
+
 # add in additional variables from census data
 # 1. add education level (education level is define as high, medium, low, based on paper doi: 10.1093/ije/dyab080 and ASCED - ISCED2011 Level Correspondence Table)
 source('determineEducationLevel.R', local=TRUE); 
@@ -38,15 +51,3 @@ echo(
   )
 )
 
-# Prepare census and other datasets to assign work locations.
-source('prepWorkData.R', local=TRUE); 
-prepWorkData(outputDir)
-
-# assigns a work SA1 location for those that work.
-# takes about 2 days to run for the entire population
-#might want to run this one interactively
-source('assignWorkLocations.R', local=TRUE); 
-assignWorkLocations(
-  outputDir,
-  population
-)
