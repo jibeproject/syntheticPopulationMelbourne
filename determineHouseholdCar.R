@@ -113,7 +113,7 @@ determineEducationLevel <- function(outputDir) {
     left_join(household_hhCar_joined%>%
                 select(HouseholdId,hhCar))
   
-  echo(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to ", outputDir, '\n'))
-  saveRDS(population_hhCar_joined,paste0(outputDir,'/populationHhCar.rds'))
+  echo(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to DataFrame\n"))
+  return(population_hhCar_joined)
   
 }
