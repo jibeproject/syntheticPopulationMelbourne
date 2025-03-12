@@ -10,8 +10,6 @@ outputDir="../output"
 
 dir.create(outputDir, showWarnings = FALSE, recursive=TRUE)
 
-
-
 # collates the population into a single table, adding in household ids
 source('collatePopulation.R', local=TRUE); 
 population <- collate2016Population()
@@ -19,19 +17,6 @@ population <- collate2016Population()
 # using census data determines if agents should be employed or not
 source('determineEmployed.R', local=TRUE); 
 population <- determineEmployed(population)
-
-# gets the census and other datasets ready for assigning work locations.
-source('prepWorkData.R', local=TRUE); 
-prepWorkData(outputDir)
-
-# assigns a work SA1 location for those that work.
-# takes about 2 days to run for the entire population
-#might want to run this one interactively
-source('assignWorkLocations.R', local=TRUE); 
-assignWorkLocations(
-  outputDir,
-  population
-)
 
 # add in additional variables from census data
 # 1. add education level (education level is define as high, medium, low, based on paper doi: 10.1093/ije/dyab080 and ASCED - ISCED2011 Level Correspondence Table)
@@ -51,4 +36,17 @@ echo(
     final_processed_population_data_file,
     "\n"
   )
+)
+
+# Prepare census and other datasets to assign work locations.
+source('prepWorkData.R', local=TRUE); 
+prepWorkData(outputDir)
+
+# assigns a work SA1 location for those that work.
+# takes about 2 days to run for the entire population
+#might want to run this one interactively
+source('assignWorkLocations.R', local=TRUE); 
+assignWorkLocations(
+  outputDir,
+  population
 )
