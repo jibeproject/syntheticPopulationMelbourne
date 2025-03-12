@@ -12,8 +12,9 @@ flowchart TD
         determineEducationLevel.R -->
         determineHouseholdCar.R
     end
+    i@{ shape: docs, label: "input files"}--> makeExamplePopulation.R
     Util.R--imported by-->makeExamplePopulation.R
     makeExamplePopulation.R -->
-    C@{ shape: docs, label: "output files"} -->
+    o@{ shape: docs, label: "output files"} -->
     analyseWorkLocations.R
 ```
