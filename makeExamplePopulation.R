@@ -51,14 +51,20 @@ determineHouseholdCar(
   outputDir
 )
 
-
-
-
 # reformat to match Manchester data
 
-
-
-
-
-
-
+# read in the last created/modified file in workflow above
+last_processed_population_data_file <- paste0(outputDir,'/populationHhCar.rds')
+final_processed_population_data_file <-  paste0(outputDir,'/population_final.rds')
+population <- readRDS(last_processed_population_data_file)
+saveRDS(population,final_processed_population_data_file)
+echo(
+  paste0("Wrote ",
+    nrow(population),
+    " sampled persons from ",
+    last_processed_population_data_file,
+    " to ",
+    final_processed_population_data_file,
+    "\n"
+  )
+)
