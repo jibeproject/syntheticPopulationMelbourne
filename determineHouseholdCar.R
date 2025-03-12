@@ -1,10 +1,10 @@
 suppressPackageStartupMessages(library(dplyr))
 
-determineEducationLevel <- function(outputDir) {
+determineHouseholdCar <- function(population) {
  
   echo(paste0("Injesting population data\n"))
   
-  population <- readRDS(paste0(outputDir,'/populationEducation.rds'))%>%
+  population <- population%>%
     left_join(read.csv("abs/melb_sa1_IRSAD_2016.csv")%>%
                 select(SA1_7DIGCODE,IRSAD))%>%
     mutate(IRSAD = as.numeric(IRSAD))

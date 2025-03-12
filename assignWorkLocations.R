@@ -3,7 +3,7 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 
-assignWorkLocations <- function(outputDir, populationEmployed) {
+assignWorkLocations <- function(outputDir, workers) {
   
   # Prepare census and other datasets to assign work locations.
   source('prepWorkData.R', local=TRUE); 
@@ -17,13 +17,13 @@ assignWorkLocations <- function(outputDir, populationEmployed) {
   
   work_hist_sa3 <- readRDS(paste0(outputDir,"/work_hist_sa3.rds"))
   work_sa3_movement <- readRDS(paste0(outputDir,"/work_sa3_movement.rds"))
-  populationEmployed <- populationEmployed %>%
+  workers <- workers %>%
     ungroup() %>%
     data.frame() %>%
     filter(is_employed) %>%
     mutate(PlanId=AgentId) %>%
     dplyr::select(PlanId,SA1_MAINCODE_2016)
-  populationEmployed$sa3_home <- as.integer(substr(populationEmployed$SA1_MAINCODE_2016,1,5))
+  workers$sa3_home <- as.integer(substr(workers$SA1_MAINCODE_2016,1,5))
   workLocationsSA1 <- read.csv(paste0(outputDir,"/workLocationsSA1.csv")) %>%
     select(sa1_maincode_2016,work_location_pr=sa3_pr)
   workLocationsSA1<-data.table(workLocationsSA1)
@@ -54,8 +54,8 @@ assignWorkLocations <- function(outputDir, populationEmployed) {
   # tmp<-work_hist_sa3 %>%
   #   filter(is.nan(pr))
   
-  home_count_sa3 <- populationEmployed %>%
-    mutate(sa3_home=as.integer(substr(populationEmployed$SA1_MAINCODE_2016,1,5))) %>%
+  home_count_sa3 <- workers %>%
+    mutate(sa3_home=as.integer(substr(workers$SA1_MAINCODE_2016,1,5))) %>%
     group_by(sa3_home) %>%
     summarise(home_count=n()) %>%
     ungroup()
@@ -80,7 +80,7 @@ assignWorkLocations <- function(outputDir, populationEmployed) {
     mutate(sa3_order=sample(1:n())) %>%
     ungroup()
   
-  populationEmployed_sa3 <- populationEmployed %>%
+  workers_sa3 <- workers %>%
     arrange(PlanId) %>%
     group_by(sa3_home) %>%
     mutate(sa3_order=row_number()) %>%
@@ -100,16 +100,16 @@ assignWorkLocations <- function(outputDir, populationEmployed) {
   setkey(sa3DistCounterIndex, sa3)
   globalDistCounter <<- data.table(distance=1:280,count=0)
   
-  # populationEmployed_sa1 <- populationEmployed_sa3[1:1000,] %>% mutate(sa1_work=NA)
-  populationEmployed_sa1 <- populationEmployed_sa3[sample(nrow(populationEmployed_sa3)),] %>% mutate(sa1_work=as.numeric(NA))
+  # workers_sa1 <- workers_sa3[1:1000,] %>% mutate(sa1_work=NA)
+  workers_sa1 <- workers_sa3[sample(nrow(workers_sa3)),] %>% mutate(sa1_work=as.numeric(NA))
   
   i<-0
   start_time <- Sys.time()
   
-  while(i<nrow(populationEmployed_sa1)) {
+  while(i<nrow(workers_sa1)) {
     i<-i+1
-    SA1_id <- populationEmployed_sa1$SA1_MAINCODE_2016[i]
-    SA3_id <- populationEmployed_sa1$sa3_work[i]
+    SA1_id <- workers_sa1$SA1_MAINCODE_2016[i]
+    SA3_id <- workers_sa1$sa3_work[i]
     workPr <- getWorkPr(SA1_id,SA3_id) %>%
       mutate(overal_pr=(work_location_adj+2*sa3_dist_adj+2*global_dist_adj)/distance_proportion) %>%
       mutate(overal_pr=overal_pr/sum(overal_pr,na.rm=T)) %>%
@@ -117,7 +117,7 @@ assignWorkLocations <- function(outputDir, populationEmployed) {
     destinationSA1 <- sample(workPr$sa1_maincode_2016, size=1, prob=workPr$overal_pr)
     distanceDestination <- workPr[sa1_maincode_2016==destinationSA1]$distance
     setWorkCounters(SA1_id,destinationSA1,distanceDestination)
-    populationEmployed_sa1[i,]$sa1_work <- destinationSA1
+    workers_sa1[i,]$sa1_work <- destinationSA1
     if(i%%1000==0) cat(paste0("balanced ",i," at ",Sys.time(),"\n"))
   }
   end_time <- Sys.time()
@@ -126,7 +126,7 @@ assignWorkLocations <- function(outputDir, populationEmployed) {
   saveRDS(workLocationCounter,paste0(outputDir,"/workLocationCounter_balanced.rds"))
   saveRDS(sa3DistCounter     ,paste0(outputDir,"/sa3DistCounter_balanced.rds"     ))
   saveRDS(globalDistCounter  ,paste0(outputDir,"/globalDistCounter_balanced.rds"  ))
-  saveRDS(populationEmployed_sa1        ,paste0(outputDir,"/populationEmployed_sa1_balance1.rds"        ))
+  saveRDS(workers_sa1        ,paste0(outputDir,"/workers_sa1_balance1.rds"        ))
   
 }
 
