@@ -1,10 +1,8 @@
 suppressPackageStartupMessages(library(dplyr))
 
-determineEducationLevel <- function(outputDir) {
+determineEducationLevel <- function(population) {
  
   echo(paste0("Injesting population data\n"))
-  
-  population <- readRDS(paste0(outputDir,'/populationEmployed.rds'))
   
   population_education_count <- population %>%
     group_by(SA2_MAINCODE,Gender,age_cat) %>%
@@ -65,7 +63,7 @@ determineEducationLevel <- function(outputDir) {
     arrange(SA2_MAINCODE,Gender,age_cat,random_sample) %>%
     select(-pop_count,-low_count,-medium_count,-high_count,-random_sample)
   
-  echo(paste0("Wrote ", nrow(population_education_joined), " sampled persons to ", outputDir, '\n'))
-  saveRDS(population_education_joined,paste0(outputDir,'/populationEducation.rds'))
+  echo(paste0("Wrote ", nrow(population_education_joined), " sampled persons to DataFrame"))
+  return(population_education_joined)
   
 }
