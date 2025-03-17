@@ -6,6 +6,8 @@ suppressPackageStartupMessages(library(igraph))
 suppressPackageStartupMessages(library(future))
 suppressPackageStartupMessages(library(furrr))
 
+plan(multisession) 
+
 collate2016Population <- function(plansFile=NA) {
   
   # read in the list of SA1s we want to keep
@@ -18,14 +20,9 @@ collate2016Population <- function(plansFile=NA) {
   # get all the Melbourne 2016 persons files by SA2
   df<-data.frame(SA2=list.files(path='data', pattern = "\\persons.csv.gz$", recursive = TRUE, full.names = TRUE), stringsAsFactors=FALSE)
   persons<-NULL
-  echo(paste0("Collating the population from Melbourne's ", nrow(df), " SA2 areas (can take a while)\n"))
-  
-  # Use furrr to run importPersons in parallel
+  echo(paste0("Collating the population from Melbourne's ", nrow(df), " SA2 areas\n"))
   persons_list <- future_map(df$SA2, ~ importPersons(.x, sa1s), .progress = TRUE)
-  
-  # Combine the results into a single data frame
   persons <- bind_rows(persons_list)
-  
   cat('\n')
   
   # read in the SA1s file so we can attach the full code
@@ -139,7 +136,6 @@ assignHHids <- function(df) {
 
   # Making the graph for the relationships
   g <- graph_from_data_frame(all_relationships, vertices = all_relationships_ids, directed = FALSE) 
-  #plot(g,  vertex.size=0.1, vertex.label=NA, vertex.color="red", edge.arrow.size=0, edge.curved = 0)
   
   # Getting components
   comp <- components(g)
@@ -147,10 +143,6 @@ assignHHids <- function(df) {
                         HouseholdId=comp$membership+nrow(no_relationship_ids), row.names=NULL)
   
   df_households <- bind_rows(no_relationship_ids,comp_df)
-  
-  # df_children_compressed <- df_children %>%
-  #   group_by(AgentId) %>%
-  #   summarize(ChildrenIds = list(ChildrenIds))
   
   df_children_compressed <- df_children %>%
     group_by(AgentId) %>%
