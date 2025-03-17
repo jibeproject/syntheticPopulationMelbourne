@@ -3,8 +3,10 @@ suppressPackageStartupMessages(library(dplyr))
 # suppressPackageStartupMessages(library(tibble))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(igraph))
+suppressPackageStartupMessages(library(future))
+suppressPackageStartupMessages(library(furrr))
 
-collate2016Population <- function(outputDir, plansFile=NA) {
+collate2016Population <- function(plansFile=NA) {
   
   # read in the list of SA1s we want to keep
   sa1s <- NULL
@@ -17,10 +19,13 @@ collate2016Population <- function(outputDir, plansFile=NA) {
   df<-data.frame(SA2=list.files(path='data', pattern = "\\persons.csv.gz$", recursive = TRUE, full.names = TRUE), stringsAsFactors=FALSE)
   persons<-NULL
   echo(paste0("Collating the population from Melbourne's ", nrow(df), " SA2 areas (can take a while)\n"))
-  for(row in 1:nrow(df)) {
-    printProgress(row,".")
-    persons<-rbind(persons,importPersons(df$SA2[row],sa1s))
-  }
+  
+  # Use furrr to run importPersons in parallel
+  persons_list <- future_map(df$SA2, ~ importPersons(.x, sa1s), .progress = TRUE)
+  
+  # Combine the results into a single data frame
+  persons <- bind_rows(persons_list)
+  
   cat('\n')
   
   # read in the SA1s file so we can attach the full code
@@ -40,8 +45,8 @@ collate2016Population <- function(outputDir, plansFile=NA) {
   echo(paste0("Assigning households to ", nrow(persons_cleaned), " people (can take a while)\n"))
   persons_with_hh <- assignHHids(persons_cleaned)
   
-  echo(paste0("Wrote ", nrow(persons), " sampled persons to ", outputDir, '\n'))
-  saveRDS(persons_with_hh,paste0(outputDir,'/collatedPopulation.rds'))
+  echo(paste0("Wrote ", nrow(persons), " sampled persons to DataFrame\n"))
+  return(persons_with_hh)
 
 }
 
