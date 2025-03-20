@@ -33,14 +33,12 @@ determineEmployed <- function(population) {
     group_by(SA2_MAINCODE,Gender,age_cat) %>%
     summarise(pop_count=n())
   
-  work_status <- read.csv("abs/melb_sa2_employment_2016.csv") %>%
+  work_status <- read.csv("abs/melb_sa2_employment_2016_2025update/melb_sa2_employment_2016_2025update_cleaned.csv") %>%
     mutate(tot=Employed+Not.Employed) %>%
     dplyr::select(SA2_MAINCODE=SA2,Age,Gender=Sex,Employed,Total=tot) %>%
     mutate(employment_percent=Employed/Total) %>%
     mutate(employment_percent=ifelse(is.nan(employment_percent), 0, employment_percent)) %>%
-    fill(SA2_MAINCODE, .direction="down") %>%
     mutate(Age=ifelse(Age=="",NA,Age)) %>%
-    fill(Age, .direction="down") %>%
     dplyr::mutate(age_cat = case_when(Age == "0-4 years"   ~  1,
                                       Age == "5-9 years"   ~  2,
                                       Age == "10-14 years" ~  3,
