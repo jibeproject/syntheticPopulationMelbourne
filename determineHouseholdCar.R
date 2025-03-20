@@ -1,10 +1,10 @@
 suppressPackageStartupMessages(library(dplyr))
 
-determineEducationLevel <- function(outputDir) {
+determineHouseholdCar <- function(population) {
  
   echo(paste0("Injesting population data\n"))
   
-  population <- readRDS(paste0(outputDir,'/populationEducation.rds'))%>%
+  population <- population%>%
     left_join(read.csv("abs/melb_sa1_IRSAD_2016.csv")%>%
                 select(SA1_7DIGCODE,IRSAD))%>%
     mutate(IRSAD = as.numeric(IRSAD))
@@ -113,7 +113,7 @@ determineEducationLevel <- function(outputDir) {
     left_join(household_hhCar_joined%>%
                 select(HouseholdId,hhCar))
   
-  echo(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to ", outputDir, '\n'))
-  saveRDS(population_hhCar_joined,paste0(outputDir,'/populationHhCar.rds'))
+  echo(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to DataFrame\n"))
+  return(population_hhCar_joined)
   
 }

@@ -6,59 +6,48 @@ options(dplyr.summarise.inform = FALSE)
 # load general purpose utility functions
 source("util.R")
 
-outputDir="output/test"
+outputDir="../output"
 
-dir.create(paste0('../',outputDir), showWarnings = FALSE, recursive=TRUE)
-
-
+dir.create(outputDir, showWarnings = FALSE, recursive=TRUE)
 
 # collates the population into a single table, adding in household ids
 source('collatePopulation.R', local=TRUE); 
-collate2016Population(
-  outputDir
-)
+population <- collate2016Population()
 
 # using census data determines if agents should be employed or not
 source('determineEmployed.R', local=TRUE); 
-determineEmployed(
-  outputDir
-)
-
-# gets the census and other datasets ready for assigning work locations.
-source('prepWorkData.R', local=TRUE); 
-prepWorkData(
-  outputDir
-)
+population <- determineEmployed(population)
 
 # assigns a work SA1 location for those that work.
 # takes about 2 days to run for the entire population
 #might want to run this one interactively
 source('assignWorkLocations.R', local=TRUE); 
-assignWorkLocations(
-  outputDir
-)
+
+# Run assignWorkLocations asynchronously
+future_assignWorkLocations <- future({
+  assignWorkLocations(
+    outputDir,
+    population
+  )
+})
 
 # add in additional variables from census data
 # 1. add education level (education level is define as high, medium, low, based on paper doi: 10.1093/ije/dyab080 and ASCED - ISCED2011 Level Correspondence Table)
 source('determineEducationLevel.R', local=TRUE); 
-determineEducationLevel(
-  outputDir
-)
+population <- determineEducationLevel(population)
 
 # 2. add household number of cars 
 source('determineHouseholdCar.R', local=TRUE); 
-determineHouseholdCar(
-  outputDir
+population <- determineHouseholdCar(population)
+
+final_processed_population_data_file <-  paste0(outputDir,'/population_final.rds')
+saveRDS(population,final_processed_population_data_file)
+echo(
+  paste0("Wrote ",
+    nrow(population),
+    " sampled persons to ",
+    final_processed_population_data_file,
+    "\n"
+  )
 )
-
-
-
-
-# reformat to match Manchester data
-
-
-
-
-
-
 

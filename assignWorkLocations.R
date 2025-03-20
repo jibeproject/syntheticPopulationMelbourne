@@ -3,10 +3,13 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 
-assignWorkLocations <- function(outputDir) {
+assignWorkLocations <- function(outputDir, workers) {
   
+  # Prepare census and other datasets to assign work locations.
+  source('prepWorkData.R', local=TRUE); 
+  prepWorkData(outputDir)
+
   # import data -------------------------------------------------------------
-  # outputDir="output"
   work_hist_global <- readRDS(paste0(outputDir,"/work_hist_global.rds")) %>%
     mutate(distance=row_number()) %>%
     select(distance,global_dist_pr=pr) %>%
@@ -14,7 +17,7 @@ assignWorkLocations <- function(outputDir) {
   
   work_hist_sa3 <- readRDS(paste0(outputDir,"/work_hist_sa3.rds"))
   work_sa3_movement <- readRDS(paste0(outputDir,"/work_sa3_movement.rds"))
-  workers <- readRDS(paste0(outputDir,'/populationEmployed.rds')) %>%
+  workers <- workers %>%
     ungroup() %>%
     data.frame() %>%
     filter(is_employed) %>%
