@@ -50,7 +50,7 @@ determineEducationLevel <- function(population) {
   
   set.seed(12)
   
-  echo(paste0("Performing join on ", nrow(population), " sampled persons, may take a while\n"))
+  echo(paste0("Performing join on ", nrow(population), " sampled persons\n"))
   
   population_education_joined <- population %>%
     inner_join(education_count, by=c("SA2_MAINCODE","Gender","age_cat")) %>%

@@ -29,7 +29,7 @@ source('assignWorkLocations.R', local=TRUE);
 
 # Run assignWorkLocations asynchronously; this outputs files to the output directory
 # but does not return anything.  It currently is a long running process.
-future({
+future_assignWorkLocations <- future({
   assignWorkLocations(
     outputDir,
     population
