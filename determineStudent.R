@@ -18,10 +18,34 @@ enrolments_higher_education <- read.csv("data/schools/higher education/Melbourne
 
 # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
 census_data_path = "abs/Melb 2016 - Student status by SA2 (UR) AGE5P SEXP/Melb 2016 - SA2 (UR), AGE5P - Age in Five Year Groups and SEXP cleaned.csv"
-census_data <- prepare_census_data(census_data_path)
 
-# set data.table
-setDT(census_data)
+prepare_census_data <- function(census_data_path) {
+    # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
+    # The three categories are: "SA2..UR.", "AGE5P", "SEXP"
+    # The three relevant count columns are "Not.attending", "Full.time.student", "Part.time.student"
+    # The full time and part time counts are summed to get the total student count
+    # The sum of the three count columns is the total population denominator (not stated are excluded)
+    # The probability of being a student in an SA2 given age and gender is calculated as the student count divided by the total population
+    # Note that this is only used for persions aged 15 and older, persons aged 5 to 14 are assumed to be students
+    census_data <- fread(census_data_path, check.names = TRUE)
+    
+    # Calculate total student count, total population, and student probability
+    census_data[, total_student_count := Full.time.student + Part.time.student]
+    census_data[, total_population := Not.attending + Full.time.student + Part.time.student]
+    census_data[, student_probability := total_student_count / total_population]
+    census_data[is.na(student_probability), student_probability := 0]
+    
+    # Convert age categories to integer
+    census_data[, age_cat := get_age_cat_int_from_str(AGE5P)]
+    
+    # Select and rename columns
+    census_data <- census_data[, .(SA2_MAINCODE = SA2..UR., age_cat, Gender = SEXP, student_probability)]
+    
+    return(census_data)
+}
+
+# ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
+census_data <- prepare_census_data(census_data_path)
 
 get_grade_given_age <- function(age) {
     # The law in Victoria states that children must attend school from the age of 6. 
@@ -29,17 +53,14 @@ get_grade_given_age <- function(age) {
     # Our primary/secondary enrolment data have overall and gender stratified enrolment totals for each grade,
     # as follows: Year.1.Males.Total	Year.1.Females.Total	Year.1.Total
     # The following lookup table will be used to determine the grade given the age of the student.
-    if (age < 5 || age > 17) {
-        return(NA)
-    }
     age_grade_lookup <- c(
-        "5" = "Prep",
-        "6" = "Grade.1",
-        "7" = "Grade.2",
-        "8" = "Grade.3",
-        "9" = "Grade.4",
-        "10" = "Grade.5",
-        "11" = "Grade.6",
+         "5" = "Prep",
+         "6" = "Year.1",
+         "7" = "Year.2",
+         "8" = "Year.3",
+         "9" = "Year.4",
+        "10" = "Year.5",
+        "11" = "Year.6",
         "12" = "Year.7",
         "13" = "Year.8",
         "14" = "Year.9",
@@ -48,20 +69,6 @@ get_grade_given_age <- function(age) {
         "17" = "Year.12"
     )
     return(age_grade_lookup[as.character(age)])
-}
-
-student_status_given_area_age_gender <- function(area, age, gender) {
-    # Using census data, the given SA2 area code, age_cat and gender 
-    age_cat = get_age_cat_from_age(age)
-    # the probability of being a student is identified and applied
-    student_probability <- census_data[
-        SA2_MAINCODE == area & 
-        age_cat == age_cat & 
-        gender == gender, 
-        student_probability
-    ]
-    student_status <- ifelse(runif(length(student_probability)) < student_probability, TRUE, FALSE)
-    return(student_status)
 }
 
 allocateSchools <- function(population) {
@@ -75,50 +82,42 @@ allocateSchools <- function(population) {
     
     population_schools[, age_cat := get_age_cat_from_age(Age)]
     
-    population_schools[, 
-        student_status := 
-            fifelse(Age < 5, FALSE,
-            fifelse(Age < 15, TRUE,
-            student_status_given_area_age_gender(SA2_MAINCODE, Age, gender)))
-        ]
+    # Perform a join to get student_probability
+    population_schools <- merge(
+        population_schools, 
+        census_data, 
+        by.x = c("SA2_MAINCODE", "age_cat", "Gender"), 
+        by.y = c("SA2_MAINCODE", "age_cat", "Gender"), 
+        all.x = TRUE
+    )
+    population_schools[, student_status := fifelse(Age < 5, FALSE,
+                                        fifelse(Age >= 5 & Age <= 17, TRUE,
+                                                fifelse(is.na(student_probability), FALSE, runif(.N) < student_probability)))]
     
-    population_schools[, school_grade := get_grade_given_age(Age)]
+    population_schools[, school_grade := fifelse(Age < 5, NA_character_,
+                                        fifelse(Age > 17, NA_character_,
+                                    get_grade_given_age(Age)))]
     
-    population_schools[, school_type := fifelse(Age < 5, NA_integer_,
-                                        fifelse(Age < 12, 1,
-                                                fifelse(student_status & Age <= 17, 2, 3)))]
-    
+    population_schools[, school_type := fifelse(student_status & Age < 12, 1,
+                                    fifelse(student_status & Age <= 17, 2, 
+                                fifelse(student_status, 3, NA_integer_)))]
+
     # Return the data
     return(population_schools)
 }
 
-prepare_census_data <- function(census_data_path) {
-    # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
-    # The three categories are: "SA2..UR.", "AGE5P", "SEXP"
-    # The three relevant count columns are "Not.attending", "Full.time.student", "Part.time.student"
-    # The full time and part time counts are summed to get the total student count
-    # The sum of the three count columns is the total population denominator (not stated are excluded)
-    # The probability of being a student in an SA2 given age and gender is calculated as the student count divided by the total population
-    # Note that this is only used for persions aged 15 and older, persons aged 5 to 14 are assumed to be students
-    census_data <- read.csv(census_data_path)
-    census_data <- census_data %>%
-        mutate(
-            total_student_count = Full.time.student + Part.time.student,
-            total_population = Not.attending + Full.time.student + Part.time.student,
-            student_probability = total_student_count / total_population,
-            age_cat = get_age_cat_int_from_str(AGE5P)
-        ) %>%
-        select(SA2..UR., age_cat, SEXP, student_probability) %>%
-        rename(
-            SA2_MAINCODE=SA2..UR.,
-            gender=SEXP
-        )
+population_schools <-allocateSchools(population)   
+population_schools %>%
+    group_by(student_status,school_grade,school_type) %>%
+    summarise(
+        total = n(),
+        age_mean = mean(Age,na.rm=TRUE),
+        age_sd = sd(Age,na.rm=TRUE),
+        age_min = min(Age,na.rm=TRUE),
+        age_max = max(Age,na.rm=TRUE)
+    ) %>%
+  arrange(age_min)
 
-    return(census_data)
-}
-
-# ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
-census_data <- prepare_census_data()
 
 clean_primary_secondary <- function(primary_secondary) {
     
