@@ -9,7 +9,7 @@ library(sf)
 source("util.R")
 
 # Load project properties (includes coordinate reference system)
-properties_file <- "../melbourne/project.properties"
+properties_file <- "../project.properties"
 source(properties_file)
 
 # Set seed for reproducibility
@@ -51,22 +51,24 @@ prepare_census_data <- function(census_data_path) {
 census_data <- prepare_census_data(census_data_path)
 
 # 2019 Primary and secondary data have grade and gender-specific enrolment totals
-enrolments_primary_secondary <- read.csv(
-        "data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv"
+enrolments_primary_secondary <- (read.csv(
+    "data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv"
     ) %>% 
     st_as_sf(
-        coords = c("X", "Y"),
-        crs = crs
-    )
+    coords = c("X", "Y"),
+    crs = 4326
+    )) %>% st_transform(crs = crs) %>% 
+    st_join(zoneSystem, join = st_intersects)
 
 # 2018 Tertiary and technical higher education
-enrolments_higher_education <- read.csv(
+enrolments_higher_education <- (read.csv(
         "data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv"
     ) %>% 
     st_as_sf(
         coords = c("longitude_4326", "latitude_4326"),
-        crs = crs
-    )
+        crs = 4326
+    )) %>% st_transform(crs = crs) %>% 
+    st_join(zoneSystem, join = st_intersects)
 
 get_grade_given_age <- function(age) {
     # The law in Victoria states that children must attend school from the age of 6. 
