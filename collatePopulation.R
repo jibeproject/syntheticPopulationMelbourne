@@ -35,6 +35,7 @@ collate2016Population <- function(plansFile=NA) {
   
   
   persons_cleaned <- persons %>%
+    filter(Age>=0) %>%
     mutate(across(c(Gender,RelationshipStatus), ~ as.factor(.x))) %>%
     mutate(across(c(PartnerId,MotherId,FatherId,ChildrenIds,RelativeIds), ~ ifelse(.x=="",NA,.x))) %>%
     inner_join(sa1s, by=c("SA1_7DIGCODE"="SA1_7DIGITCODE_2016"))
