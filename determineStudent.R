@@ -1,5 +1,6 @@
 library(tidyverse)
 library(data.table)
+library(sf)
 
 # For testing
 # test<- population[sample(nrow(population),20),]
@@ -7,14 +8,16 @@ library(data.table)
 # load general purpose utility functions
 source("util.R")
 
+# Load project properties (includes coordinate reference system)
+properties_file <- "../melbourne/project.properties"
+source(properties_file)
+
 # Set seed for reproducibility
 set.seed(12)
 
-# 2019 Primary and secondary data have grade and gender-specific enrolment totals
-enrolments_primary_secondary <- read.csv("data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv")
-
-# 2018 Tertiary and technical higher education
-enrolments_higher_education <- read.csv("data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv")
+# Load the zone system
+zonesShapeile = "../melbourne/input/zonesShapefile/SA1_2016_AUST_MEL.shp"
+zoneSystem <- st_read(zonesShapeile) %>% st_transform(crs = crs)
 
 # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
 census_data_path = "abs/Melb 2016 - Student status by SA2 (UR) AGE5P SEXP/Melb 2016 - SA2 (UR), AGE5P - Age in Five Year Groups and SEXP cleaned.csv"
@@ -39,13 +42,31 @@ prepare_census_data <- function(census_data_path) {
     census_data[, age_cat := get_age_cat_int_from_str(AGE5P)]
     
     # Select and rename columns
-    census_data <- census_data[, .(SA2_MAINCODE = SA2..UR., age_cat, Gender = SEXP, student_probability)]
+    census_data <- census_data[, .(SA2_MAINCODE = SA2..UR., AGE5P, age_cat, Gender = SEXP, total_student_count, total_population, student_probability)]
     
     return(census_data)
 }
 
 # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
 census_data <- prepare_census_data(census_data_path)
+
+# 2019 Primary and secondary data have grade and gender-specific enrolment totals
+enrolments_primary_secondary <- read.csv(
+        "data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv"
+    ) %>% 
+    st_as_sf(
+        coords = c("X", "Y"),
+        crs = crs
+    )
+
+# 2018 Tertiary and technical higher education
+enrolments_higher_education <- read.csv(
+        "data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv"
+    ) %>% 
+    st_as_sf(
+        coords = c("longitude_4326", "latitude_4326"),
+        crs = crs
+    )
 
 get_grade_given_age <- function(age) {
     # The law in Victoria states that children must attend school from the age of 6. 
