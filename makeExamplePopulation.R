@@ -1,7 +1,11 @@
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
+
 # Suppress summarise info
 options(dplyr.summarise.inform = FALSE)
+
+# Increase the maximum allowed size for globals
+options(future.globals.maxSize = 1024 * 1024 * 1024) # 1 GB
 
 # load general purpose utility functions
 source("util.R")
@@ -23,7 +27,8 @@ population <- determineEmployed(population)
 #might want to run this one interactively
 source('assignWorkLocations.R', local=TRUE); 
 
-# Run assignWorkLocations asynchronously
+# Run assignWorkLocations asynchronously; this outputs files to the output directory
+# It currently is a long running process.
 future_assignWorkLocations <- future({
   assignWorkLocations(
     outputDir,

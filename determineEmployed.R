@@ -71,7 +71,7 @@ determineEmployed <- function(population) {
   
   set.seed(12)
   
-  echo(paste0("Performing join on ", nrow(population_employed), " sampled persons, may take a while\n"))
+  echo(paste0("Performing join on ", nrow(population_employed), " sampled persons\n"))
   
   population_employed_joined <- population_employed %>%
     inner_join(work_count, by=c("SA2_MAINCODE","Gender","age_cat")) %>%
