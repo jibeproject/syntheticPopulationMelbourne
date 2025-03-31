@@ -50,31 +50,31 @@ getGroups<-function(filterCsv) {
   return(filters)
 }
 
-get_age_cat_int_from_str <- function(Age) {
-    age_category <- case_when(
-                AGE5P == "0-4 years"   ~  1,
-                AGE5P == "5-9 years"   ~  2,
-                AGE5P == "10-14 years" ~  3,
-                AGE5P == "15-19 years" ~  4,
-                AGE5P == "20-24 years" ~  5,
-                AGE5P == "25-29 years" ~  6,
-                AGE5P == "30-34 years" ~  7,
-                AGE5P == "35-39 years" ~  8,
-                AGE5P == "40-44 years" ~  9,
-                AGE5P == "45-49 years" ~ 10,
-                AGE5P == "50-54 years" ~ 11,
-                AGE5P == "55-59 years" ~ 12,
-                AGE5P == "60-64 years" ~ 13,
-                AGE5P == "65-69 years" ~ 14,
-                AGE5P == "70-74 years" ~ 15,
-                AGE5P == "75-79 years" ~ 16,
-                AGE5P == "80-84 years" ~ 17,
-                AGE5P == "85-89 years" ~ 18,
-                AGE5P == "90-94 years" ~ 19,
-                AGE5P == "95-99 years" ~ 20,
-                AGE5P == "100 years and over" ~ 21
+get_age_cat_int_from_str <- function(age_str) {
+    age_mapping <- list(
+        "0-4 years"   = 1,
+        "5-9 years"   = 2,
+        "10-14 years" = 3,
+        "15-19 years" = 4,
+        "20-24 years" = 5,
+        "25-29 years" = 6,
+        "30-34 years" = 7,
+        "35-39 years" = 8,
+        "40-44 years" = 9,
+        "45-49 years" = 10,
+        "50-54 years" = 11,
+        "55-59 years" = 12,
+        "60-64 years" = 13,
+        "65-69 years" = 14,
+        "70-74 years" = 15,
+        "75-79 years" = 16,
+        "80-84 years" = 17,
+        "85-89 years" = 18,
+        "90-94 years" = 19,
+        "95-99 years" = 20,
+        "100 years and over" = 21
     )
-    return(age_category)
+    return(age_mapping[[age_str]])
 }
 
 get_age_cat_from_age <- function(Age) {
