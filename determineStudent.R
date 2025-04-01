@@ -21,7 +21,7 @@ set.seed(12)
 ## but only those within the Greater Melbourne area.
 ## This is a limitation of the current model, that should be noted. 
 ## This may be addressed at a later stage, should we have capacity.
-zonesShapefile = "../melbourne/input/zonesShapefile/SA1_2016_AUST_MEL.shp"
+zonesShapefile = "../input/zonesShapefile/SA1_2016_AUST_MEL.shp"
 zoneSystem <- st_read(zonesShapefile) %>% st_transform(crs = crs)
 
 # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
@@ -166,9 +166,14 @@ allocateSchool <- function(population_students, enrolments_primary_secondary, en
     # The school types are 1 (primary), 2 (secondary), and 3 (higher education)
     # Gender and school grades are used for primary and secondary only 
 
-    # First for each school, identify students of matching type and grade (where applicable) located within 1600m Euclidean distance (about a 20 minute walk, beyond which distance other modes of transport may be begin to be more likely to be used).  We will use these to determine which students are within the catchment of a single school in the first instance.  Later, continuous distance will be used to prioritise remaining students
     primary_secondary <- setDT(enrolments_primary_secondary %>% copy())
     higher_education <- setDT(enrolments_higher_education %>% copy())
+    # First for each school, identify students of matching type and grade (where applicable) located within 1600m Euclidean distance (about a 20 minute walk, beyond which distance other modes of transport may be begin to be more likely to be used).  We will use these to determine which students are within the catchment of a single school in the first instance.  Later, continuous distance will be used to prioritise remaining students.
+    # Because our synthetic population is only located by SA1, and not for specific 
+    # micro-locations, there is little benefit from route based analysis since origin 
+    # locations have been meaningfully determined beyond the broader SA1 catchment.
+    # Hence, buffer analysis is used in first instance, then Euclidean distance to closest 
+    # from SA1 centroid.
     primary_secondary[,'buffer':= st_buffer(geometry, dist = 1600)]
     higher_education[,'buffer':= st_buffer(geometry, dist = 1600)]
 
@@ -217,25 +222,101 @@ allocateSchool <- function(population_students, enrolments_primary_secondary, en
             NA_character_
         )
     ]
-    # This aligns with primary_secondary data and can be checked with the following: 
+
+    # Update the population_schools primary_secondary_catchment list of IDs for those students that have a 
+    # non-NA primary_secondary_enrolment, based on the school IDs in the primary_
+    # secondary_catchment list having a column name matching the 
+    # primary_secondary_enrolment value and with value in that column greater than zero
+    # This should return a list of jibeSchoolId values.
+
+    population_schools[school_type %in% c(1, 2), primary_secondary_catchment := 
+        lapply(
+            seq_len(nrow(population_schools)), 
+            function(i) {
+                if (!is.na(primary_secondary_catchment[i]) && !is.na(primary_secondary_enrolment[i])) {
+                    ids <- unlist(primary_secondary_catchment[i])
+                    enrolment_col <- primary_secondary_enrolment[i]
+                    if (length(ids) > 0 && !all(is.na(ids)) && !is.na(enrolment_col)) {
+                        valid_ids <- primary_secondary[
+                            jibeSchoolId %in% ids & 
+                            get(enrolment_col) > 0, 
+                            jibeSchoolId
+                        ]
+                        if (length(valid_ids) > 0) valid_ids else NA_complex_
+                    } else {
+                        list()
+                    }
+                } else {
+                    list()
+                }
+            }
+        )
+    ]
+
+    # For primary and secondary school students having no listed school in their catchment, identify the closest school having a non-zero enrolment in the column matching their primary_secondary_enrolment value.  This is done by evaluating the distance from the SA1 centroid to the school location, and returning the jibeSchoolId of the closest school having a non-zero enrolment in that column.  This is done for each student having a non-NA primary_secondary_catchment value.
+    population_schools[school_type %in% c(1, 2) & is.na(primary_secondary_catchment), 
+        primary_secondary_catchment := 
+            lapply(
+                seq_len(nrow(population_schools)), 
+                function(i) {
+                    if (!is.na(primary_secondary_enrolment[i])) {
+                        enrolment_col <- primary_secondary_enrolment[i]
+                        ids <- primary_secondary[
+                            get(enrolment_col) > 0, 
+                            jibeSchoolId
+                        ]
+                        if (length(ids) > 0) {
+                            distances <- st_distance(
+                                population_schools[i, geometry], 
+                                primary_secondary[jibeSchoolId %in% ids, geometry]
+                            )
+                            closest_school_id <- ids[which.min(distances)]
+                            closest_school_id
+                        } else {
+                            NA_complex_
+                        }
+                    } else {
+                        NA_complex_
+                    }
+                }
+            )
+    ]
+
+
+
+    # This aligns individuals with their appropriate primary_secondary enrolment data field, 
+    # and can be checked with the following: 
     # population_schools[,c('primary_secondary_enrolment','school_type')] %>% table
 
     # Evaluate students' catchments with respect to school type---and if primary/secondary, gender and grade---within 1600m.  Gender and grade are only relevant for primary and secondary students.  Primary and secondary school data has columns matching the school grade and gender matching the pattern "{school_grade}.{Gender}.Total", with that total being an integer value greater than zero.
     
     population_schools[, school_catchment := 
-        fifelse(!is.na(primary_secondary_catchment) & school_type %in% c(1, 2),
-            lapply(primary_secondary_catchment, function(ids) {
-                if (!is.null(ids) && length(ids) > 0 && !all(is.na(ids))) {
-                    valid_ids <- primary_secondary[
-                        jibeSchoolId %in% ids & 
-                        get(primary_secondary_catchment) > 0, 
-                        jibeSchoolId
-                    ]
-                    if (length(valid_ids) > 0) valid_ids else list()
-                } else {
-                    list()
-                }
-            }),
+        fifelse(
+            !is.na(primary_secondary_catchment) & school_type %in% c(1, 2),
+            {
+                # Filter valid rows for primary/secondary schools
+                valid_rows <- !is.na(primary_secondary_catchment) & school_type %in% c(1, 2)
+                
+                # Extract valid IDs and enrolment columns
+                ids_list <- primary_secondary_catchment[valid_rows]
+                enrolment_cols <- primary_secondary_enrolment[valid_rows]
+                
+                # Vectorized evaluation of valid IDs
+                lapply(seq_along(ids_list), function(i) {
+                    ids <- ids_list[[i]]
+                    enrolment_col <- enrolment_cols[i]
+                    if (!is.null(ids) && length(ids) > 0 && !all(is.na(ids)) && !is.na(enrolment_col)) {
+                        valid_ids <- primary_secondary[
+                            jibeSchoolId %in% ids & 
+                            get(enrolment_col) > 0, 
+                            jibeSchoolId
+                        ]
+                        if (length(valid_ids) > 0) valid_ids else list()
+                    } else {
+                        list()
+                    }
+                })
+            },
             higher_education_catchment
         )
     ]
