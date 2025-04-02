@@ -183,6 +183,7 @@ allocateSchools <- function(population_students) {
     primary_secondary <- setDT(enrolments_primary_secondary %>% copy())
     higher_education <- setDT(enrolments_higher_education %>% copy())
     zone_system <- setDT(zoneSystem %>% copy())
+    setkey(zone_system, SA1_MAIN16)
     population_schools <- setDT(
         population_students[
             student_status == TRUE, 
@@ -215,6 +216,9 @@ allocateSchools <- function(population_students) {
     higher_education[, allocated_enrolments_Male := 0]
     higher_education[, allocated_enrolments_Female := 0]
 
+    setkey(primary_secondary, jibeSchoolId)
+    setkey(higher_education, jibeSchoolId)
+
     locate_school <- function(sa1_zone_index, Gender, school_grade, school_type) {
         # Given an enrolement column, assign a school to the student based on match of SA1_MAINCODE_2016 with either a school in same SA1 zone, or if not possible, from an SA1 matching the 'sa1_catchments' list ids for the school, where 1) the enrolment column is greater than zero and 2) the 'allocated_enrolments' is not greater than the enrolment column.  The first school that meets these criteria is assigned to the student.  If no schools meet these criteria, the student is assigned NA.  School allocation given attributes is incremented.
         # The function returns the jibeSchoolId of the assigned school.
@@ -246,7 +250,7 @@ allocateSchools <- function(population_students) {
             return(school)
         } 
         catchment_schools <- potential_schools[
-            mapply(`%in%`,sa1_zone_index,sa1_catchment),
+            map_lgl(sa1_catchment, ~ sa1_zone_index %in% .x),
         ]
         if (nrow(catchment_schools) > 0) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
@@ -262,7 +266,7 @@ allocateSchools <- function(population_students) {
                 )), 
             jibeSchoolId
         ]
-        if (!is.na(closest_school)) {
+        if (!is.na(closest_school) && !(length(closest_school) == 0)) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
             school <- allocate_located_school(closest_school, school_data, allocated_enrolment_column)
             return(school)
