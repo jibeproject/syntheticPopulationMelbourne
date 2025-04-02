@@ -1,8 +1,8 @@
 library(tidyverse)
 library(data.table)
 library(sf)
-library(furrr)
-library(progressr)
+library(purrr)
+library(logger)
 
 # For testing
 # test<- population[sample(nrow(population),20),]
@@ -29,6 +29,67 @@ zoneSystem <- st_read(zonesShapefile) %>% st_transform(crs = crs)
 # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
 census_data_path = "abs/Melb 2016 - Student status by SA2 (UR) AGE5P SEXP/Melb 2016 - SA2 (UR), AGE5P - Age in Five Year Groups and SEXP cleaned.csv"
 
+
+determineStudentSchools <- function(population) {
+    log_info("Setting up census data")
+    census_data <- prepare_census_data(census_data_path)
+    log_info("Allocating student status")
+    population_students <-allocateStudentStatus(population)   
+    # population_students %>%
+    #     group_by(student_status,school_grade,school_type) %>%
+    #     summarise(
+    #         total = n(),
+    #         age_mean = mean(Age,na.rm=TRUE),
+    #         age_sd = sd(Age,na.rm=TRUE),
+    #         age_min = min(Age,na.rm=TRUE),
+    #         age_max = max(Age,na.rm=TRUE)
+    #     ) %>%
+    # arrange(age_min)
+    log_info("Setting up primary and secondary schools")
+    # 2019 Primary and secondary data have grade and gender-specific enrolment totals and zones
+    enrolments_primary_secondary <- (read.csv(
+        "data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv"
+        ) %>% 
+        st_as_sf(
+        coords = c("X", "Y"),
+        crs = 4326
+        )) %>% st_transform(crs = crs) %>% 
+        st_join(zoneSystem, join = st_intersects) %>%
+        filter(!is.na(SA1_MAIN16)) %>%
+        mutate(
+            jibeSchoolId = row_number()
+        ) %>% 
+        select(jibeSchoolId, everything())
+    log_info("Setting up higher education schools")
+    # 2018 Tertiary and technical higher education enrolment totals and zones
+    enrolments_higher_education <- (read.csv(
+            "data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv"
+        ) %>% 
+        st_as_sf(
+            coords = c("longitude_4326", "latitude_4326"),
+            crs = 4326
+        )) %>% st_transform(crs = crs) %>% 
+        st_join(zoneSystem, join = st_intersects) %>%
+        filter(!is.na(SA1_MAIN16)) %>%
+        mutate(
+            jibeSchoolId = row_number() + max(enrolments_primary_secondary$jibeSchoolId, na.rm = TRUE)
+        ) %>% 
+        select(jibeSchoolId, everything())
+
+    log_info("Allocating schools to students (this is a long running process)")
+    population_schools <- allocateSchools(population_students[student_status==TRUE,])
+
+    log_info("Joining the students with schools back to the population data")
+    population_students <- merge(
+        population_students, 
+        population_schools[, .(AgentId, assigned_school)], 
+        by = "AgentId", 
+        all.x = TRUE
+    )
+    log_info("Returning the population data with schools assigned.")
+    return (population_students)
+}
+
 prepare_census_data <- function(census_data_path) {
     # ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
     # The three categories are: "SA2..UR.", "AGE5P", "SEXP"
@@ -53,10 +114,6 @@ prepare_census_data <- function(census_data_path) {
     
     return(census_data)
 }
-
-# ABS 2016 Census fulltime/parttime student status by SA2, Age group and gender
-census_data <- prepare_census_data(census_data_path)
-
 
 get_grade_given_age <- function(age) {
     # The law in Victoria states that children must attend school from the age of 6. 
@@ -116,53 +173,6 @@ allocateStudentStatus <- function(population) {
     # Return the data
     return(population_students)
 }
-
-population_students <-allocateStudentStatus(population)   
-population_students %>%
-    group_by(student_status,school_grade,school_type) %>%
-    summarise(
-        total = n(),
-        age_mean = mean(Age,na.rm=TRUE),
-        age_sd = sd(Age,na.rm=TRUE),
-        age_min = min(Age,na.rm=TRUE),
-        age_max = max(Age,na.rm=TRUE)
-    ) %>%
-  arrange(age_min)
-
-
-# 2019 Primary and secondary data have grade and gender-specific enrolment totals 
-# with matching zone data
-enrolments_primary_secondary <- (read.csv(
-    "data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv"
-    ) %>% 
-    st_as_sf(
-    coords = c("X", "Y"),
-    crs = 4326
-    )) %>% st_transform(crs = crs) %>% 
-    st_join(zoneSystem, join = st_intersects) %>%
-    filter(!is.na(SA1_MAIN16)) %>%
-    mutate(
-        jibeSchoolId = row_number()
-    ) %>% 
-    select(jibeSchoolId, everything())
-
-# 2018 Tertiary and technical higher education 
-# with matching zone data
-enrolments_higher_education <- (read.csv(
-        "data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv"
-    ) %>% 
-    st_as_sf(
-        coords = c("longitude_4326", "latitude_4326"),
-        crs = 4326
-    )) %>% st_transform(crs = crs) %>% 
-    st_join(zoneSystem, join = st_intersects) %>%
-    filter(!is.na(SA1_MAIN16)) %>%
-    mutate(
-        jibeSchoolId = row_number() + max(enrolments_primary_secondary$jibeSchoolId, na.rm = TRUE)
-    ) %>% 
-    select(jibeSchoolId, everything())
-
-
 
 allocateSchools <- function(population_students) {
     # For each student, assign a school accounting for school enrolements
@@ -281,4 +291,3 @@ allocateSchools <- function(population_students) {
     return(population_schools)
 }
 
-population_schools <- allocateSchools(population_students[student_status==TRUE,])
