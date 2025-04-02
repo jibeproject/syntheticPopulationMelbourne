@@ -1,6 +1,8 @@
 library(tidyverse)
 library(data.table)
 library(sf)
+library(furrr)
+library(progressr)
 
 # For testing
 # test<- population[sample(nrow(population),20),]
@@ -160,7 +162,9 @@ enrolments_higher_education <- (read.csv(
     ) %>% 
     select(jibeSchoolId, everything())
 
-allocateSchool <- function(population_students, enrolments_primary_secondary, enrolments_higher_education) {
+
+
+allocateSchools <- function(population_students) {
     # For each student, assign a school accounting for school enrolements
     # based on the school type, gender, grade and distance (closest)
     # The school types are 1 (primary), 2 (secondary), and 3 (higher education)
@@ -198,37 +202,37 @@ allocateSchool <- function(population_students, enrolments_primary_secondary, en
 
     primary_secondary[, allocated_enrolments_Male := 0]
     primary_secondary[, allocated_enrolments_Female := 0]
+    higher_education[, allocated_enrolments_Male := 0]
+    higher_education[, allocated_enrolments_Female := 0]
 
-    assign_school <- function(id, school_dataset, allocated_enrolment_column) {
-        # Given a school record, and a list of schools, update the allocated_enrolment_column in the schools data frame and return the jibeSchoolId of the assigned school.
-
-        if (school_dataset=='primary_secondary') {
-            enrolments <- primary_secondary[jibeSchoolId==id, get(allocated_enrolment_column)] 
-            primary_secondary[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
-        } else if (school_dataset=='higher_education') {
-            higher_education[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
-        } else {
-            stop("Invalid school dataset")
-        }
-        return(id)
-    }
-
-    assign_primary_secondary_school <- function(sa1_zone_index, Gender, school_grade) {
-        # Given an enrolement column, assign a school to the student based on match of SA1_MAINCODE_2016 with one of the 'sa1_catchments' list ids for the school, where 1) the enrolment column is greater than zero and 2) the 'allocated_enrolments' is not greater than the enrolment column.  The first school that meets these criteria is assigned to the student.  If no schools meet these criteria, the student is assigned NA.
+    locate_school <- function(sa1_zone_index, Gender, school_grade, school_type) {
+        # Given an enrolement column, assign a school to the student based on match of SA1_MAINCODE_2016 with either a school in same SA1 zone, or if not possible, from an SA1 matching the 'sa1_catchments' list ids for the school, where 1) the enrolment column is greater than zero and 2) the 'allocated_enrolments' is not greater than the enrolment column.  The first school that meets these criteria is assigned to the student.  If no schools meet these criteria, the student is assigned NA.  School allocation given attributes is incremented.
         # The function returns the jibeSchoolId of the assigned school.
-
-        enrolment_column <- paste0(school_grade, ".", Gender, "s.Total")
-        allocated_enrolment_column <- paste0('allocated_enrolments_',Gender)
-        potential_schools <- primary_secondary[
-            get(enrolment_column) > 0 & 
-            get(allocated_enrolment_column) < get(enrolment_column)
-        ]
+        if (school_type == 3) {
+            school_data <- 'higher_education'
+            enrolment_column <- gsub("Female","Female.or.non.binary",Gender)
+            allocated_enrolment_column <- paste0('allocated_enrolments_',Gender)
+            potential_schools <- higher_education[
+                get(enrolment_column) > 0 & 
+                get(allocated_enrolment_column) < get(enrolment_column)
+            ]
+        } else if (school_type %in% c(1,2)) {
+            school_data <- 'primary_secondary'
+            enrolment_column <- paste0(school_grade, ".", Gender, "s.Total")
+            allocated_enrolment_column <- paste0('allocated_enrolments_',Gender)
+            potential_schools <- primary_secondary[
+                get(enrolment_column) > 0 & 
+                get(allocated_enrolment_column) < get(enrolment_column)
+            ]
+        } else {
+            stop("Invalid school type")
+        }
         sa1_schools <- potential_schools[
             SA1_MAIN16==zone_system[sa1_zone_index, SA1_MAIN16],
         ]
         if (nrow(sa1_schools) > 0) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
-            school <- assign_school(sa1_schools[1, jibeSchoolId], 'primary_secondary', allocated_enrolment_column)
+            school <- assign_school(sa1_schools[1, jibeSchoolId], school_data, allocated_enrolment_column)
             return(school)
         } 
         catchment_schools <- potential_schools[
@@ -236,7 +240,7 @@ allocateSchool <- function(population_students, enrolments_primary_secondary, en
         ]
         if (nrow(catchment_schools) > 0) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
-            school <- assign_school(catchment_schools[1, jibeSchoolId], 'primary_secondary', allocated_enrolment_column)
+            school <- assign_school(catchment_schools[1, jibeSchoolId], school_data, allocated_enrolment_column)
             return(school)
         } 
         # If this student's SA1 is not within 1600m of any school, find the closest matching school with available enrolments to this students SA1
@@ -250,12 +254,31 @@ allocateSchool <- function(population_students, enrolments_primary_secondary, en
         ]
         if (!is.na(closest_school)) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
-            school <- assign_school(closest_school, 'primary_secondary', allocated_enrolment_column)
+            school <- assign_school(closest_school, school_data, allocated_enrolment_column)
             return(school)
         }
         # If no schools meet the criteria, return NA
         return(NA)
     }
 
-    population_schools[school_type %in% c(1, 2), assigned_school := purrr::pmap_int(.(sa1_zone_index, Gender, school_grade), assign_primary_secondary_school)]
+    
+    allocate_located_school <- function(id, school_dataset, allocated_enrolment_column) {
+        # Given a school record, and a list of schools, update the allocated_enrolment_column in the schools data frame and return the jibeSchoolId of the assigned school.
+
+        if (school_dataset=='primary_secondary') {
+            enrolments <- primary_secondary[jibeSchoolId==id, get(allocated_enrolment_column)] 
+            primary_secondary[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
+        } else if (school_dataset=='higher_education') {
+            higher_education[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
+        } else {
+            stop("Invalid school dataset")
+        }
+        return(id)
+    }
+
+    population_schools[, assigned_school := purrr::pmap_int(.(sa1_zone_index, Gender, school_grade, school_type), locate_school)]
+
+    return(population_schools)
 }
+
+population_schools <- allocateSchools(population_students[student_status==TRUE,])
