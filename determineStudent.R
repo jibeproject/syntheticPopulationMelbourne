@@ -1,7 +1,7 @@
 library(tidyverse)
 library(data.table)
 library(sf)
-library(purrr)
+library(furrr)
 library(logger)
 
 # For testing
@@ -279,6 +279,7 @@ allocateSchools <- function(population_students) {
             enrolments <- primary_secondary[jibeSchoolId==id, get(allocated_enrolment_column)] 
             primary_secondary[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
         } else if (school_dataset=='higher_education') {
+            enrolments <- higher_education[jibeSchoolId==id, get(allocated_enrolment_column)] 
             higher_education[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
         } else {
             stop("Invalid school dataset")
@@ -286,8 +287,11 @@ allocateSchools <- function(population_students) {
         return(id)
     }
 
-    population_schools[, assigned_school := purrr::pmap_int(.(sa1_zone_index, Gender, school_grade, school_type), locate_school)]
-
+    population_schools[, assigned_school := future_pmap_int(
+        .(sa1_zone_index, Gender, school_grade, school_type), 
+        locate_school
+    )]
+  
     return(population_schools)
 }
 
