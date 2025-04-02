@@ -9,7 +9,7 @@ flowchart TD
         determineEmployed.R -->
         determineEducationLevel.R -->
         determineHouseholdCar.R -->
-        determineStudentSchool.R -->
+        determineStudentSchool.R
         determineEmployed.R -->
         assignWorkLocations.R
     end
