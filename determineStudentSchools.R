@@ -3,6 +3,7 @@ library(data.table)
 library(sf)
 library(furrr)
 library(logger)
+library(ggplot2)
 
 # For testing
 # test<- population[sample(nrow(population),20),]
@@ -31,6 +32,8 @@ census_data_path = "abs/Melb 2016 - Student status by SA2 (UR) AGE5P SEXP/Melb 2
 
 
 determineStudentSchools <- function(population) {
+    initial_columns <- colnames(population)
+    new_columns <- c("student_status", "school_type", "school_grade", "assigned_school")
     log_info("Setting up census data")
     census_data <<- prepare_census_data(census_data_path)
     log_info("Allocating student status")
@@ -86,8 +89,60 @@ determineStudentSchools <- function(population) {
         by = "AgentId", 
         all.x = TRUE
     )
+    population_students <- population_students %>% as_tibble() %>% select(all_of(c(initial_columns,new_columns)))
+    log_info("Saving summary plot: ../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg")
+    prepare_summary_plot(population_students, census_data)
     log_info("Returning the population data with schools assigned.")
     return (population_students)
+}
+
+prepare_summary_plot <- function(population_students, census_data) {
+
+    population_student_summary<- population_students %>%
+    group_by(age_cat, Gender) %>%
+    summarise(
+        total_students = sum(student_status, na.rm = TRUE),
+        total_population = n(),
+        student_percentage = (total_students / total_population) * 100
+    )
+
+    census_student_summary<- census_data %>%
+    group_by(age_cat, Gender) %>%
+    summarise(
+        total_students = sum(total_student_count, na.rm = TRUE),
+        total_population = sum(total_population, na.rm = TRUE),
+        student_percentage = (total_students / total_population) * 100
+    )
+    # Combine the two summaries into one tibble for comparison
+    combined_summary <- bind_rows(
+    population_student_summary %>% mutate(Source = "Population"),
+    census_student_summary %>% mutate(Source = "Census")
+    )
+
+    # Plot the data
+    ggplot(combined_summary, aes(x = age_cat, y = student_percentage, color = Gender, linetype = Source)) +
+    geom_line(size = 1) +
+    labs(
+        title = "Comparison of Student Percentage by Age and Gender",
+        x = "Age Category",
+        y = "Student Percentage",
+        color = "Gender",
+        linetype = "Source"
+    ) +
+    theme_minimal() +
+    scale_y_continuous(labels = scales::percent_format()) +
+    theme(
+        legend.position = "bottom",
+        text = element_text(size = 12)
+    )
+    ggsave(
+        filename = "../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg",
+        plot = last_plot(),
+        device = "jpg",
+        width = 10,
+        height = 6,
+        units = "in"
+    )
 }
 
 prepare_census_data <- function(census_data_path) {
