@@ -168,156 +168,94 @@ allocateSchool <- function(population_students, enrolments_primary_secondary, en
 
     primary_secondary <- setDT(enrolments_primary_secondary %>% copy())
     higher_education <- setDT(enrolments_higher_education %>% copy())
+    zone_system <- setDT(zoneSystem %>% copy())
+    population_schools <- setDT(
+        population_students[
+            student_status == TRUE, 
+            c("AgentId","SA1_MAINCODE_2016","Age", "Gender", "school_type", "school_grade", "school_type", "school_grade")        
+        ] %>% copy()
+    )
+    population_schools[, sa1_zone_index := match(SA1_MAINCODE_2016, zone_system$SA1_MAIN16)] 
     # First for each school, identify students of matching type and grade (where applicable) located within 1600m Euclidean distance (about a 20 minute walk, beyond which distance other modes of transport may be begin to be more likely to be used).  We will use these to determine which students are within the catchment of a single school in the first instance.  Later, continuous distance will be used to prioritise remaining students.
     # Because our synthetic population is only located by SA1, and not for specific 
     # micro-locations, there is little benefit from route based analysis since origin 
     # locations have been meaningfully determined beyond the broader SA1 catchment.
-    # Hence, buffer analysis is used in first instance, then Euclidean distance to closest 
+    # Hence, buffer analysis is used in first instance, rather than Euclidean distance to closest 
     # from SA1 centroid.
-    primary_secondary[,'buffer':= st_buffer(geometry, dist = 1600)]
-    higher_education[,'buffer':= st_buffer(geometry, dist = 1600)]
-
-    # Population locations are currently determined to SA1 level, so rather than evaluate for each student, we will evaluate for each SA1 against the intersection with the buffer column.  This operation is done at the SA1 multipolygon level, since we don't know where within SA1s specifically individuals live. So we identify the SA1 catchment for schools then link that to individuals, then derive the type that meets their attributes.  There will be two columns created: primary_secondary and higher_education, which will contain the list of SA1s that intersect with the buffer column.
-    zoneSystem$primary_secondary_catchment <- sapply(
-        st_intersects(zoneSystem, primary_secondary$buffer),
-        function(indices) {
-            if (length(indices) > 0) {
-                primary_secondary$jibeSchoolId[indices]
-            } else {
-                NA  # No match
-            }
-        }
-    )
-    zoneSystem$higher_education_catchment <- sapply(
-        st_intersects(zoneSystem, higher_education$buffer),
-        function(indices) {
-            if (length(indices) > 0) {
-                higher_education$jibeSchoolId[indices]
-            } else {
-                NA  # No match
-            }
-        }
-    )
-    # Now we can join the zoneSystem with the population data to get the school catchments for each student.  This only retains the students.
-    population_schools <- merge(
-        population_students[student_status == TRUE], 
-        zoneSystem %>% 
-            mutate(
-                SA1_MAINCODE_2016 = as.double(SA1_MAIN16)
-            ) %>% 
-            select(
-                SA1_MAINCODE_2016, 
-                primary_secondary_catchment, 
-                higher_education_catchment
-            ),
-        by = "SA1_MAINCODE_2016",
-        all.x = TRUE
-    )
-
-    # For primary and secondary school students, precompute the column name for their enrolment evaluation.  
-    population_schools[, primary_secondary_enrolment := 
-        fifelse(
-            school_type %in% c(1, 2), 
-            paste0(school_grade, ".", Gender, "s.Total"), 
-            NA_character_
-        )
-    ]
-
-    # Update the population_schools primary_secondary_catchment list of IDs for those students that have a 
-    # non-NA primary_secondary_enrolment, based on the school IDs in the primary_
-    # secondary_catchment list having a column name matching the 
-    # primary_secondary_enrolment value and with value in that column greater than zero
-    # This should return a list of jibeSchoolId values.
-
-    population_schools[school_type %in% c(1, 2), primary_secondary_catchment := 
-        lapply(
-            seq_len(nrow(population_schools)), 
-            function(i) {
-                if (!is.na(primary_secondary_catchment[i]) && !is.na(primary_secondary_enrolment[i])) {
-                    ids <- unlist(primary_secondary_catchment[i])
-                    enrolment_col <- primary_secondary_enrolment[i]
-                    if (length(ids) > 0 && !all(is.na(ids)) && !is.na(enrolment_col)) {
-                        valid_ids <- primary_secondary[
-                            jibeSchoolId %in% ids & 
-                            get(enrolment_col) > 0, 
-                            jibeSchoolId
-                        ]
-                        if (length(valid_ids) > 0) valid_ids else NA_complex_
-                    } else {
-                        list()
-                    }
-                } else {
-                    list()
-                }
-            }
-        )
-    ]
-
-    # For primary and secondary school students having no listed school in their catchment, identify the closest school having a non-zero enrolment in the column matching their primary_secondary_enrolment value.  This is done by evaluating the distance from the SA1 centroid to the school location, and returning the jibeSchoolId of the closest school having a non-zero enrolment in that column.  This is done for each student having a non-NA primary_secondary_catchment value.
-    population_schools[school_type %in% c(1, 2) & is.na(primary_secondary_catchment), 
-        primary_secondary_catchment := 
-            lapply(
-                seq_len(nrow(population_schools)), 
-                function(i) {
-                    if (!is.na(primary_secondary_enrolment[i])) {
-                        enrolment_col <- primary_secondary_enrolment[i]
-                        ids <- primary_secondary[
-                            get(enrolment_col) > 0, 
-                            jibeSchoolId
-                        ]
-                        if (length(ids) > 0) {
-                            distances <- st_distance(
-                                population_schools[i, geometry], 
-                                primary_secondary[jibeSchoolId %in% ids, geometry]
-                            )
-                            closest_school_id <- ids[which.min(distances)]
-                            closest_school_id
-                        } else {
-                            NA_complex_
-                        }
-                    } else {
-                        NA_complex_
-                    }
-                }
+    # Population locations are currently determined to SA1 level, so rather than evaluate for each student, we will evaluate for each school which SA1s intersect with the buffer columns.  Since we don't know where within SA1s specifically individuals live, we identify the SA1 catchments for schools then link that to individuals filtering on the type that meets their attributes. This will be done separately for primary/secondary and higher education schools.
+    compute_buffers <- function(zone_system, school_data, distance) {
+        school_data[, 'sa1_catchment' :=
+            st_intersects(
+                st_buffer(geometry, dist = distance),
+                zone_system$geometry,
+                sparse = TRUE
             )
-    ]
+        ]
+    }
 
+    primary_secondary <- compute_buffers(zoneSystem, primary_secondary, 1600)
+    higher_education <- compute_buffers(zoneSystem, higher_education, 1600)
 
+    primary_secondary[, allocated_enrolments_Male := 0]
+    primary_secondary[, allocated_enrolments_Female := 0]
 
-    # This aligns individuals with their appropriate primary_secondary enrolment data field, 
-    # and can be checked with the following: 
-    # population_schools[,c('primary_secondary_enrolment','school_type')] %>% table
+    assign_school <- function(id, school_dataset, allocated_enrolment_column) {
+        # Given a school record, and a list of schools, update the allocated_enrolment_column in the schools data frame and return the jibeSchoolId of the assigned school.
 
-    # Evaluate students' catchments with respect to school type---and if primary/secondary, gender and grade---within 1600m.  Gender and grade are only relevant for primary and secondary students.  Primary and secondary school data has columns matching the school grade and gender matching the pattern "{school_grade}.{Gender}.Total", with that total being an integer value greater than zero.
-    
-    population_schools[, school_catchment := 
-        fifelse(
-            !is.na(primary_secondary_catchment) & school_type %in% c(1, 2),
-            {
-                # Filter valid rows for primary/secondary schools
-                valid_rows <- !is.na(primary_secondary_catchment) & school_type %in% c(1, 2)
-                
-                # Extract valid IDs and enrolment columns
-                ids_list <- primary_secondary_catchment[valid_rows]
-                enrolment_cols <- primary_secondary_enrolment[valid_rows]
-                
-                # Vectorized evaluation of valid IDs
-                lapply(seq_along(ids_list), function(i) {
-                    ids <- ids_list[[i]]
-                    enrolment_col <- enrolment_cols[i]
-                    if (!is.null(ids) && length(ids) > 0 && !all(is.na(ids)) && !is.na(enrolment_col)) {
-                        valid_ids <- primary_secondary[
-                            jibeSchoolId %in% ids & 
-                            get(enrolment_col) > 0, 
-                            jibeSchoolId
-                        ]
-                        if (length(valid_ids) > 0) valid_ids else list()
-                    } else {
-                        list()
-                    }
-                })
-            },
-            higher_education_catchment
-        )
-    ]
+        if (school_dataset=='primary_secondary') {
+            enrolments <- primary_secondary[jibeSchoolId==id, get(allocated_enrolment_column)] 
+            primary_secondary[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
+        } else if (school_dataset=='higher_education') {
+            higher_education[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
+        } else {
+            stop("Invalid school dataset")
+        }
+        return(id)
+    }
+
+    assign_primary_secondary_school <- function(sa1_zone_index, Gender, school_grade) {
+        # Given an enrolement column, assign a school to the student based on match of SA1_MAINCODE_2016 with one of the 'sa1_catchments' list ids for the school, where 1) the enrolment column is greater than zero and 2) the 'allocated_enrolments' is not greater than the enrolment column.  The first school that meets these criteria is assigned to the student.  If no schools meet these criteria, the student is assigned NA.
+        # The function returns the jibeSchoolId of the assigned school.
+
+        enrolment_column <- paste0(school_grade, ".", Gender, "s.Total")
+        allocated_enrolment_column <- paste0('allocated_enrolments_',Gender)
+        potential_schools <- primary_secondary[
+            get(enrolment_column) > 0 & 
+            get(allocated_enrolment_column) < get(enrolment_column)
+        ]
+        sa1_schools <- potential_schools[
+            SA1_MAIN16==zone_system[sa1_zone_index, SA1_MAIN16],
+        ]
+        if (nrow(sa1_schools) > 0) {
+            # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
+            school <- assign_school(sa1_schools[1, jibeSchoolId], 'primary_secondary', allocated_enrolment_column)
+            return(school)
+        } 
+        catchment_schools <- potential_schools[
+            mapply(`%in%`,sa1_zone_index,sa1_catchment),
+        ]
+        if (nrow(catchment_schools) > 0) {
+            # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
+            school <- assign_school(catchment_schools[1, jibeSchoolId], 'primary_secondary', allocated_enrolment_column)
+            return(school)
+        } 
+        # If this student's SA1 is not within 1600m of any school, find the closest matching school with available enrolments to this students SA1
+        closest_school <- potential_schools[
+            which.min(
+                st_distance(
+                    potential_schools$geometry,
+                    zone_system[sa1_zone_index]$geometry
+                )), 
+            jibeSchoolId
+        ]
+        if (!is.na(closest_school)) {
+            # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
+            school <- assign_school(closest_school, 'primary_secondary', allocated_enrolment_column)
+            return(school)
+        }
+        # If no schools meet the criteria, return NA
+        return(NA)
+    }
+
+    population_schools[school_type %in% c(1, 2), assigned_school := purrr::pmap_int(.(sa1_zone_index, Gender, school_grade), assign_primary_secondary_school)]
 }
