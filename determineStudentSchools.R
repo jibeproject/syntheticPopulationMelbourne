@@ -32,7 +32,7 @@ census_data_path = "abs/Melb 2016 - Student status by SA2 (UR) AGE5P SEXP/Melb 2
 
 determineStudentSchools <- function(population) {
     log_info("Setting up census data")
-    census_data <- prepare_census_data(census_data_path)
+    census_data <<- prepare_census_data(census_data_path)
     log_info("Allocating student status")
     population_students <-allocateStudentStatus(population)   
     # population_students %>%
@@ -47,7 +47,7 @@ determineStudentSchools <- function(population) {
     # arrange(age_min)
     log_info("Setting up primary and secondary schools")
     # 2019 Primary and secondary data have grade and gender-specific enrolment totals and zones
-    enrolments_primary_secondary <- (read.csv(
+    enrolments_primary_secondary <<- (read.csv(
         "data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv"
         ) %>% 
         st_as_sf(
@@ -62,7 +62,7 @@ determineStudentSchools <- function(population) {
         select(jibeSchoolId, everything())
     log_info("Setting up higher education schools")
     # 2018 Tertiary and technical higher education enrolment totals and zones
-    enrolments_higher_education <- (read.csv(
+    enrolments_higher_education <<- (read.csv(
             "data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv"
         ) %>% 
         st_as_sf(
@@ -242,7 +242,7 @@ allocateSchools <- function(population_students) {
         ]
         if (nrow(sa1_schools) > 0) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
-            school <- assign_school(sa1_schools[1, jibeSchoolId], school_data, allocated_enrolment_column)
+            school <- allocate_located_school(sa1_schools[1, jibeSchoolId], school_data, allocated_enrolment_column)
             return(school)
         } 
         catchment_schools <- potential_schools[
@@ -250,7 +250,7 @@ allocateSchools <- function(population_students) {
         ]
         if (nrow(catchment_schools) > 0) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
-            school <- assign_school(catchment_schools[1, jibeSchoolId], school_data, allocated_enrolment_column)
+            school <- allocate_located_school(catchment_schools[1, jibeSchoolId], school_data, allocated_enrolment_column)
             return(school)
         } 
         # If this student's SA1 is not within 1600m of any school, find the closest matching school with available enrolments to this students SA1
@@ -264,7 +264,7 @@ allocateSchools <- function(population_students) {
         ]
         if (!is.na(closest_school)) {
             # If there are schools in the SA1 catchment, allocate and return the first one that meets the criteria
-            school <- assign_school(closest_school, school_data, allocated_enrolment_column)
+            school <- allocate_located_school(closest_school, school_data, allocated_enrolment_column)
             return(school)
         }
         # If no schools meet the criteria, return NA
