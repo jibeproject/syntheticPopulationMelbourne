@@ -90,8 +90,9 @@ determineStudentSchools <- function(population) {
         all.x = TRUE
     )
     population_students <- population_students %>% as_tibble() %>% select(all_of(c(initial_columns,new_columns)))
-    log_info("Saving summary plot: ../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg")
+    log_info("Saving summary plots and geojson: ../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg")
     prepare_summary_plot(population_students, census_data)
+    prepare_spatial_summary_plot(population_students, census_data, zoneSystem) 
     log_info("Returning the population data with schools assigned.")
     return (population_students)
 }
@@ -143,6 +144,82 @@ prepare_summary_plot <- function(population_students, census_data) {
         height = 6,
         units = "in"
     )
+}
+
+prepare_spatial_summary_plot <- function(population_students, census_data, zoneSystem) {
+    # Summarize student percentages by SA2 and age group for population_students
+    population_summary <- population_students %>%
+        mutate(age_group = case_when(
+            age_cat %in% c(1, 2) ~ "<10",
+            age_cat %in% c(3, 4) ~ "10-20",
+            age_cat >= 5         ~ "20+"
+        )) %>%
+        group_by(SA2_MAINCODE, age_group) %>%
+        summarise(
+            total_students = sum(student_status, na.rm = TRUE),
+            total_population = n(),
+            student_percentage = (total_students / total_population) * 100
+        )
+
+    # Summarize student percentages by SA2 and age group for census_data
+    census_summary <- census_data %>%
+        mutate(age_group = case_when(
+            age_cat %in% c(1, 2) ~ "<10",
+            age_cat %in% c(3, 4) ~ "10-20",
+            age_cat >= 5         ~ "20+"
+        )) %>%
+        group_by(SA2_MAINCODE, age_group) %>%
+        summarise(
+            total_students = sum(total_student_count, na.rm = TRUE),
+            total_population = sum(total_population, na.rm = TRUE),
+            student_percentage = (total_students / total_population) * 100
+        )
+
+    # Add a source column to distinguish between Census and Population data
+    population_summary <- population_summary %>% mutate(Source = "Population")
+    census_summary <- census_summary %>% mutate(Source = "Census")
+
+    # Combine the summaries
+    combined_summary <- bind_rows(population_summary, census_summary)
+
+    # Join with zoneSystem geometries
+    choropleth_data <- zoneSystem %>%
+        mutate(SA2_MAIN16 = as.integer(SA2_MAIN16)) %>%
+        left_join(
+            combined_summary, 
+            by = c("SA2_MAIN16" = "SA2_MAINCODE"),
+            relationship = "many-to-many"
+        )
+
+    # Create the choropleth plot
+    choropleth_plot <- ggplot(data = choropleth_data) +
+        geom_sf(aes(fill = student_percentage), color = "transparent") +
+        scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Student %") +
+        labs(
+            title = "Student Percentage by SA2",
+            subtitle = "Comparison of Census and Population Data by Age Group",
+            caption = "Source: Synthetic Population and Census Data"
+        ) +
+        theme_minimal() +
+        theme(
+            legend.position = "right",
+            text = element_text(size = 12),
+            axis.title.x = element_blank(),  # Remove x-axis label
+            axis.title.y = element_blank()   # Remove y-axis label
+        ) +
+        facet_grid(age_group ~ Source)
+
+    # Save the plot
+    ggsave(
+        filename = "../output/spatial_student_percentage_by_sa2.jpg",
+        plot = choropleth_plot,
+        device = "jpg",
+        width = 12,
+        height = 8,
+        units = "in"
+    )
+  # Save the chorpleth data as a geojson file
+    st_write(choropleth_data, "../output/choropleth_student_percentage_by_sa2.geojson", delete_dsn = TRUE)
 }
 
 prepare_census_data <- function(census_data_path) {
