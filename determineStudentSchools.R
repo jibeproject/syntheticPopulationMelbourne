@@ -49,8 +49,38 @@ determineStudentSchools <- function(population) {
     #     ) %>%
     # arrange(age_min)
     log_info("Setting up primary and secondary schools")
+    enrolments_primary_secondary <<- prepare_primary_schools()
+
+    log_info("Setting up higher education schools")
+    enrolments_higher_education <<- prepare_higher_education_schools()
+
+    log_info("Preparing combined school enrolments with export to geojson")
+    combined_school_enrolments <- prepare_combined_school_enrolments()
+
+    log_info("Allocating schools to students (this is a long running process; e.g. 16 hours for 1.1 million students)")
+    population_schools <- allocateSchools(population_students[student_status==TRUE,])
+
+    log_info("Joining the students with schools back to the population data")
+    population_students <- merge(
+        population_students, 
+        population_schools[, .(AgentId, assigned_school)], 
+        by = "AgentId", 
+        all.x = TRUE
+    )
+    population_students <- population_students %>% as_tibble() %>% select(all_of(c(initial_columns,new_columns)))
+
+    log_info("Saving summary plots and csv: ../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg")
+    prepare_summary_plot(population_students, census_data)
+    prepare_spatial_summary_plot(population_students, census_data, zoneSystem) 
+
+    log_info("Returning the population data with schools assigned.")
+    return (population_students)
+}
+
+
+prepare_primary_schools <- function() {
     # 2019 Primary and secondary data have grade and gender-specific enrolment totals and zones
-    enrolments_primary_secondary <<- (read.csv(
+    enrolments_primary_secondary <- (read.csv(
         "data/schools/primary and secondary schools/primary_secondary_school_enrolments_locations.csv"
         ) %>% 
         st_as_sf(
@@ -63,10 +93,12 @@ determineStudentSchools <- function(population) {
             jibeSchoolId = row_number()
         ) %>% 
         select(jibeSchoolId, everything())
-    log_info("Setting up higher education schools")
+    return (enrolments_primary_secondary)
+}
+prepare_higher_education_schools <- function() {
     # 2018 Tertiary and technical higher education enrolment totals and zones
-    enrolments_higher_education <<- (read.csv(
-            "data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv"
+    enrolments_higher_education <- (read.csv(
+        "data/schools/higher education/Melbourne_cleaned_higher_education_enrolments_2018_with_location.csv"
         ) %>% 
         st_as_sf(
             coords = c("longitude_4326", "latitude_4326"),
@@ -75,27 +107,36 @@ determineStudentSchools <- function(population) {
         st_join(zoneSystem, join = st_intersects) %>%
         filter(!is.na(SA1_MAIN16)) %>%
         mutate(
-            jibeSchoolId = row_number() + max(enrolments_primary_secondary$jibeSchoolId, na.rm = TRUE)
+            jibeSchoolId = row_number() + max(enrolments_primary_secondary$jibeSchoolId, na.rm = TRUE),
+            Male = as.integer(gsub(",","",Male)),
+            Female = as.integer(gsub(",","",Female.or.non.binary)),
+            TOTAL = as.integer(gsub(",","",TOTAL))
         ) %>% 
         select(jibeSchoolId, everything())
-
-    log_info("Allocating schools to students (this is a long running process)")
-    population_schools <- allocateSchools(population_students[student_status==TRUE,])
-
-    log_info("Joining the students with schools back to the population data")
-    population_students <- merge(
-        population_students, 
-        population_schools[, .(AgentId, assigned_school)], 
-        by = "AgentId", 
-        all.x = TRUE
-    )
-    population_students <- population_students %>% as_tibble() %>% select(all_of(c(initial_columns,new_columns)))
-    log_info("Saving summary plots and geojson: ../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg")
-    prepare_summary_plot(population_students, census_data)
-    prepare_spatial_summary_plot(population_students, census_data, zoneSystem) 
-    log_info("Returning the population data with schools assigned.")
-    return (population_students)
+    return (enrolments_higher_education)
 }
+prepare_combined_school_enrolments <- function() {
+    # Combine enrolments_primary_secondary and enrolments_higher_education
+    combined_enrolments <- bind_rows(
+        enrolments_primary_secondary %>%
+            mutate(
+                SA1_MAINCODE_2016 = SA1_MAIN16,
+                primary_enrolments = Primary.Total,
+                secondary_enrolments = Secondary.Total,
+                higher_education_enrolments = 0  # No higher education in primary/secondary data
+            ),
+        enrolments_higher_education %>%
+            mutate(
+                SA1_MAINCODE_2016 = SA1_MAIN16,
+                primary_enrolments = 0,  # No primary enrolments in higher education data
+                secondary_enrolments = 0,  # No secondary enrolments in higher education data
+                higher_education_enrolments = TOTAL  # All rows are higher education
+            )
+    ) %>%
+        select(jibeSchoolId, SA1_MAINCODE_2016, primary_enrolments, secondary_enrolments, higher_education_enrolments)
+    st_write(combined_enrolments, "../output/schools.geojson", delete_dsn = TRUE)
+}
+
 
 prepare_summary_plot <- function(population_students, census_data) {
 
@@ -122,7 +163,7 @@ prepare_summary_plot <- function(population_students, census_data) {
 
     # Plot the data
     ggplot(combined_summary, aes(x = age_cat, y = student_percentage, color = Gender, linetype = Source)) +
-    geom_line(size = 1) +
+    geom_line(linewidth = 1) +
     labs(
         title = "Comparison of Student Percentage by Age and Gender",
         x = "Age Category",
@@ -218,8 +259,8 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
         height = 8,
         units = "in"
     )
-  # Save the chorpleth data as a geojson file
-    st_write(choropleth_data, "../output/choropleth_student_percentage_by_sa2.geojson", delete_dsn = TRUE)
+  # Save the chorpleth data as a csv file
+    write.csv(choropleth_data, "../output/student_percentage_by_population_census_age_sa2.csv", row.names = FALSE)
 }
 
 prepare_census_data <- function(census_data_path) {
@@ -356,7 +397,7 @@ allocateSchools <- function(population_students) {
         # The function returns the jibeSchoolId of the assigned school.
         if (school_type == 3) {
             school_data <- 'higher_education'
-            enrolment_column <- gsub("Female","Female.or.non.binary",Gender)
+            enrolment_column <- Gender
             allocated_enrolment_column <- paste0('allocated_enrolments_',Gender)
             potential_schools <- higher_education[
                 get(enrolment_column) > 0 & 
@@ -427,7 +468,17 @@ allocateSchools <- function(population_students) {
         .(sa1_zone_index, Gender, school_grade, school_type), 
         locate_school
     )]
-  
+    
+    st_write(
+        primary_secondary %>% select(-sa1_catchment), 
+        "../output/primary_secondary_schools_allocated.geojson", 
+        delete_dsn = TRUE
+    )
+    st_write(
+        higher_education %>% select(-sa1_catchment), 
+        "../output/higher_education_schools_allocated.geojson", 
+        delete_dsn = TRUE
+    )
     return(population_schools)
 }
 
