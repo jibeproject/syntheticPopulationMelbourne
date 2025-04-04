@@ -475,7 +475,7 @@ allocateSchools <- function(population_students) {
         log_info("Iteration {iteration}: Assigning schools to students...")
         
         # Assign schools to students
-        population_schools[, assigned_school := future_pmap_int(
+        population_schools[is.na(assigned_school), assigned_school := future_pmap_int(
             .(sa1_zone_index, Gender, school_grade, school_type), 
             locate_school
         )]
@@ -492,7 +492,6 @@ allocateSchools <- function(population_students) {
 
         iteration <- iteration + 1
     }
-
     
     st_write(
         primary_secondary %>% select(-sa1_catchment), 
