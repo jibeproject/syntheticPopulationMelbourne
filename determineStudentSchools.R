@@ -394,6 +394,10 @@ allocateSchools <- function(population_students) {
 
     locate_school <- function(sa1_zone_index, Gender, school_grade, school_type) {
         # Given an enrolement column, assign a school to the student based on match of SA1_MAINCODE_2016 with either a school in same SA1 zone, or if not possible, from an SA1 matching the 'sa1_catchments' list ids for the school, where 1) the enrolment column is greater than zero and 2) the 'allocated_enrolments' is not greater than the enrolment column.  The first school that meets these criteria is assigned to the student.  If no schools meet these criteria, the student is assigned NA.  School allocation given attributes is incremented.
+        # Adding a small delay to avoid overwhelming the system with requests
+        # This is a workaround for the issue of too many requests being sent to the server in a short period of time.
+        # see https://stackoverflow.com/a/69817842/4636357 
+        Sys.sleep(0.000001); 
         # The function returns the jibeSchoolId of the assigned school.
         if (school_type == 3) {
             school_data <- 'higher_education'
@@ -464,10 +468,31 @@ allocateSchools <- function(population_students) {
         return(id)
     }
 
-    population_schools[, assigned_school := future_pmap_int(
-        .(sa1_zone_index, Gender, school_grade, school_type), 
-        locate_school
-    )]
+    # Iterative assignment using a while loop
+    iteration <- 1
+    population_schools[, assigned_school := NA_integer_]
+    while (any(is.na(population_schools$assigned_school))) {
+        log_info("Iteration {iteration}: Assigning schools to students...")
+        
+        # Assign schools to students
+        population_schools[, assigned_school := future_pmap_int(
+            .(sa1_zone_index, Gender, school_grade, school_type), 
+            locate_school
+        )]
+
+        # Calculate the percentage of students assigned
+        assigned_percentage <- 100 * sum(!is.na(population_schools$assigned_school)) / nrow(population_schools)
+        log_info("Iteration {iteration}: {assigned_percentage}% of students have been assigned schools.")
+
+        # Break the loop if all students are assigned
+        if (assigned_percentage == 100) {
+            log_info("All students have been successfully assigned schools.")
+            break
+        }
+
+        iteration <- iteration + 1
+    }
+
     
     st_write(
         primary_secondary %>% select(-sa1_catchment), 
