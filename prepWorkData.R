@@ -1,17 +1,18 @@
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(logger))
 # Suppress summarise info
 options(dplyr.summarise.inform = FALSE)
 
 prepWorkData <- function(outputDir) {
   
-  # mode choice by SA3
+  log_info("Prepare mode choice by SA3")
   sa3_work_mode <- read.csv("abs/sa3_work_mode.csv") %>%
     select(sa3,age_group="MTWP.Method.of.Travel.to.Work",wfh=WFH,walk=WALK,bike=BIKE,pt=PT,car=CAR) %>%
     fill(sa3)
   
-  # distance distribution between SA3 pairs
+  log_info("Evaluate distance distributions between SA3 pairs")
   sa3_work_dist <- read.csv("abs/sa3_to_sa3_work_distances.csv") %>%
     fill(sa3_home)
   
@@ -44,12 +45,14 @@ prepWorkData <- function(outputDir) {
     75,77,79,82.5,87.5,92.5,97.5,105,115,125,135,145,175    
   ))
   
-  # distributes values evenly across narrower ranges. This makes the histograms more even
+  log_info("Prepare distance histograms")
+  log_info("... distributes values evenly across narrower ranges.")
+  # This makes the histograms more even
   expandRange <- function(df,range_min,range_max,source_spacing,target_spacing=1) {
     offset_value <- (source_spacing/2) - (target_spacing/2)
     df %>%
-      filter(range_value>=range_min & range_value<=range_max) %>%
-      inner_join(crossing(data.frame(range_value=seq(range_min,range_max,source_spacing)),
+      dplyr::filter(range_value>=range_min & range_value<=range_max) %>%
+      inner_join(tidyr::crossing(data.frame(range_value=seq(range_min,range_max,source_spacing)),
                           data.frame(offset=seq(offset_value*-1,offset_value,target_spacing))),
                  by="range_value") %>%
       mutate(range_value=range_value+offset) %>%
@@ -57,14 +60,14 @@ prepWorkData <- function(outputDir) {
       dplyr::select(-offset)
   }
   
-  # removing distances that are too large
+  log_info("... remove distances that are too large")
   sa3_work_dist2 <- sa3_work_dist %>%
     dplyr::select(-"nil",-"na",-"200-250",-"250-300",-"300-350",-"350-400",-"400-600",
                   -"600-800",-"800-1000",-"1000-3000",-"3000-inf") %>%
     pivot_longer(cols="0-0.5":"150-200",names_to="range",values_to="count") %>%
     left_join(ranges_df, by="range")
   
-  # the final work distance histogram with even bin widths and in long format
+  log_info("... work distance histogram with even bin widths and in long format")
   sa3_work_dist_hist <- bind_rows(
     expandRange(sa3_work_dist2,  0.25,  2.75, 0.5,0.5),
     expandRange(sa3_work_dist2,  3.5 , 29.5 , 1  ,0.5),
@@ -78,21 +81,21 @@ prepWorkData <- function(outputDir) {
     arrange(sa3_home,sa3_work,range_value) %>%
     select(-range)
   
-  # the distance histogram for the entire study region
+  log_info("... the distance histogram for the entire study region")
   work_hist_global <- sa3_work_dist_hist %>%
     group_by(range_value) %>%
     summarise(count=sum(count,na.rm=T)) %>%
     mutate(pr=count/sum(count,na.rm=T)) %>%
     mutate(pr=ifelse(is.nan(pr),0,pr))
   
-  # adding a distance probability for the regional movement
+  log_info("... adding a distance probability for the regional movement")
   work_hist_sa3 <- sa3_work_dist_hist %>%
     group_by(sa3_home,sa3_work) %>%
     mutate(pr=count/sum(count,na.rm=T)) %>%
     mutate(pr=ifelse(is.nan(pr),0,pr)) %>%
     ungroup()
   
-  # the probability of going from one region to another
+  log_info("... the probability of going from one region to another")
   work_sa3_movement <- sa3_work_dist_hist %>%
     group_by(sa3_home,sa3_work) %>%
     summarise(count=sum(count,na.rm=T)) %>%
@@ -103,16 +106,12 @@ prepWorkData <- function(outputDir) {
     mutate(pr_global=ifelse(is.nan(pr_global),0,pr_global))
   
   
-  # saving the files
+  log_info("... saving the files")
   saveRDS(work_hist_global, paste0(outputDir,"/work_hist_global.rds"))
   saveRDS(work_hist_sa3,    paste0(outputDir,"/work_hist_sa3.rds"))
   saveRDS(work_sa3_movement,paste0(outputDir,"/work_sa3_movement.rds"))
   
-  
-  
-  
-  
-  
+  log_info("Reading, transforming and writing SA1 work locations")  
   workLocationsSA1 <- read.csv(file="data/SA1attributed.csv.gz") %>%
     select(sa1_maincode_2016,global_pr=work) %>%
     filter(!is.na(global_pr))
@@ -124,10 +123,12 @@ prepWorkData <- function(outputDir) {
     select(sa1_maincode_2016,sa3,global_pr,sa3_pr)
   write.csv(workLocationsSA1,paste0(outputDir,"/workLocationsSA1.csv"),row.names=F)
   
+  log_info("Reading, transforming and writing SA1-SA3 distance matrix")
   distanceMatrixIndex <<- read.csv(file="data/distanceMatrixIndex.csv")
   distanceMatrixIndex$sa3 <- as.integer(substr(distanceMatrixIndex$sa1_maincode_2016,1,5))
   write.csv(distanceMatrixIndex,paste0(outputDir,"/distanceMatrixIndex.csv"),row.names=F)
   
+  log_info("Preparing and writing SA1 distance matrix for work")
   distanceMatrixIndexWork <- distanceMatrixIndex %>%
     filter(sa1_maincode_2016%in%workLocationsSA1$sa1_maincode_2016)
   
@@ -141,22 +142,14 @@ prepWorkData <- function(outputDir) {
   
   
   
-  # 1 select the number of work locations for each sa3->sa3. Make sure they're equal to the number of homes!
-  #
+  log_info("Select the number of work locations for each sa3->sa3.")
+  # Make sure they're equal to the number of homes!
   
   distanceMatrix <<- readRDS(file="data/distanceMatrix.rds") # note '<<' to make it global
   distanceMatrixInt <- apply(distanceMatrix,MARGIN=c(1,2),FUN=findInterval,vec=seq(0,163500,500))
   saveRDS(distanceMatrixInt,paste0(outputDir,"/distanceMatrixBins.rds"))
-  # distanceMatrixInt <- readRDS(file="distanceMatrixBins.rds")
   
   distanceMatrixWork <- distanceMatrixInt[,distanceMatrixIndexWorkIndicies]
   saveRDS(distanceMatrixWork,paste0(outputDir,"/distanceMatrixWork.rds"))
   
 }
-# tmp <- apply(distanceMatrixInt[1:20,1:20],MARGIN=c(1,2),FUN=as.integer)
-
-
-# # Some SA1s ended up snapping their centroid to the same node in the road
-# # network so we need to use an index.
-# distanceMatrixIndex <<- read.csv(file="data/distanceMatrixIndex.csv")
-# distanceMatrixIndex_dt <<- data.table(distanceMatrixIndex) # note '<<' to make it global
