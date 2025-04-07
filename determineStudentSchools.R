@@ -134,7 +134,38 @@ prepare_combined_school_enrolments <- function() {
             )
     ) %>%
         select(jibeSchoolId, SA1_MAINCODE_2016, primary_enrolments, secondary_enrolments, higher_education_enrolments)
-    st_write(combined_enrolments, "../output/schools.geojson", delete_dsn = TRUE)
+    st_write(combined_enrolments, "../output/schools_by_type.geojson", delete_dsn = TRUE)
+
+    # Prepare CSV with fields: id, zone, type, enrolmentsMale, enrolmentsFemale, enrolmentsTotal, coordX, coordY 
+    combined_schools <- bind_rows(
+        enrolments_primary_secondary %>% 
+            mutate(
+                id = jibeSchoolId,
+                zone = SA1_MAIN16,
+                type = case_when(
+                    Primary.Total > 0 & (is.na(Secondary.Total) | Secondary.Total == 0) ~ "1",
+                    Secondary.Total > 0 & (is.na(Primary.Total) | Primary.Total == 0) ~ "2",
+                    Primary.Total > 0 & Secondary.Total > 0 ~ "1,2",
+                    TRUE ~ NA_character_
+                ),
+                capacity = NA,
+                occupancy = Primary.Total + Secondary.Total,
+                coordX = st_coordinates(geometry)[, 1],
+                coordY = st_coordinates(geometry)[, 2]
+            ),
+        enrolments_higher_education %>%
+            mutate(
+                id = jibeSchoolId,
+                zone = SA1_MAIN16,
+                type = "3",
+                capacity = NA,
+                occupancy = TOTAL,
+                coordX = st_coordinates(geometry)[, 1],
+                coordY = st_coordinates(geometry)[, 2]
+            )
+    )
+
+    write.csv('../output/schools.csv', combined_schools, row.names = FALSE)
 }
 
 
@@ -235,11 +266,15 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
 
     # Join with zoneSystem geometries
     zoneSystem_dissolved <- zoneSystem %>%
-    group_by(SA2_MAIN16, SA2_NAME16) %>%
-    summarise(geometry = st_union(geometry)) %>%
-    ungroup()
+        group_by(SA2_MAIN16, SA2_NAME16) %>%
+        summarise(geometry = st_union(geometry)) %>%
+        ungroup() %>%
+        mutate(
+            geometry = st_simplify(geometry, dTolerance = 100),
+            SA2_MAIN16 = as.integer(SA2_MAIN16)
+        )  
+
     choropleth_data <- zoneSystem_dissolved %>%
-        mutate(SA2_MAIN16 = as.integer(SA2_MAIN16)) %>%
         left_join(
             combined_summary, 
             by = c("SA2_MAIN16" = "SA2_MAINCODE"),
@@ -274,10 +309,25 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
         units = "in"
     )
   # Save the chorpleth data as geojson
-  choropleth_data <- choropleth_data %>%
-    mutate(geometry = st_simplify(geometry, dTolerance = 100))  
 
-    st_write(choropleth_data, "../output/student_percentage_by_population_census_sa2.geojson", delete_dsn = TRUE)
+    # Transform combined_summary to wide format
+    combined_summary_wide <- combined_summary %>%
+        pivot_wider(
+            id_cols = SA2_MAINCODE,  # Group by SA2_MAINCODE
+            names_from = c(Source, age_group),  # Use Source and age_group as prefixes
+            values_from = c(total_students, total_population, student_percentage),  # Columns to spread
+            names_sep = "_"  # Separator for new column names
+        )
+
+    # Join with zoneSystem geometries
+    geojson <- zoneSystem_dissolved %>%
+        left_join(
+            combined_summary_wide, 
+            by = c("SA2_MAIN16" = "SA2_MAINCODE"),
+            all.x = TRUE,  # Keep all geometries
+        )
+
+    st_write(geojson, "../output/student_percentage_by_population_census_sa2.geojson", delete_dsn = TRUE)
 }
 
 prepare_census_data <- function(census_data_path) {
