@@ -56,7 +56,6 @@ determineStudentSchools <- function(population) {
 
     log_info("Preparing combined school enrolments with export to geojson and csv microdata")
     combined_school_enrolments <- prepare_combined_school_enrolments()
-    prepare_school_microdata()
 
     log_info("Allocating schools to students (this is can be a long running process)")
     population_schools <- allocateSchools(population_students[student_status==TRUE,])
@@ -75,6 +74,7 @@ determineStudentSchools <- function(population) {
     prepare_spatial_summary_plot(population_students, census_data, zoneSystem) 
 
     log_info("Returning the population data with schools assigned.")
+    prepare_school_microdata(population_students)
     return (population_students)
 }
 
@@ -138,8 +138,10 @@ prepare_combined_school_enrolments <- function() {
     st_write(combined_enrolments, "../output/schools_by_type.geojson", delete_dsn = TRUE)
 }
 
-prepare_school_microdata <- function() {
+prepare_school_microdata <- function(population_students) {
     # Prepare CSV with fields: id, zone, type, enrolmentsMale, enrolmentsFemale, enrolmentsTotal, coordX, coordY 
+    # Actual capacity is not known; using 2018 enrolments as a proxy for capacity
+    # Occupancy will be completed using the allocations in the synthetic population
     primary_secondary <- enrolments_primary_secondary %>% 
             mutate(
                 id = jibeSchoolId,
@@ -150,8 +152,8 @@ prepare_school_microdata <- function() {
                     coalesce(Primary.Total,0)  > 0 & coalesce(Secondary.Total,0)  > 0 ~ "1,2",
                     TRUE ~ NA_character_
                 ),
-                capacity = NA,
-                occupancy = coalesce(Primary.Total, 0) + coalesce(Secondary.Total, 0),
+                capacity = coalesce(Primary.Total, 0) + coalesce(Secondary.Total, 0),
+                occupancy = NA,
                 coordX = st_coordinates(geometry)[1],
                 coordY = st_coordinates(geometry)[2]
             )
@@ -160,8 +162,8 @@ prepare_school_microdata <- function() {
                 id = jibeSchoolId,
                 zone = SA1_MAIN16,
                 type = "3",
-                capacity = NA,
-                occupancy = coalesce(TOTAL,0),
+                capacity = coalesce(TOTAL,0),
+                occupancy = NA,
                 coordX = st_coordinates(geometry)[1],
                 coordY = st_coordinates(geometry)[2]
             )
@@ -174,6 +176,18 @@ prepare_school_microdata <- function() {
             st_drop_geometry() %>% 
             select(id, zone, type, capacity, occupancy, coordX, coordY)
     )
+
+    # Calculate occupancy for each school based on assigned students
+    school_occupancy <- population_students %>%
+        filter(!is.na(assigned_school)) %>%
+        group_by(assigned_school) %>%
+        summarise(occupancy = n()) %>%
+        rename(id = assigned_school)
+
+    # Update the occupancy in the combined_schools data
+    combined_schools <- combined_schools %>%
+        left_join(school_occupancy, by = "id") %>%
+        mutate(occupancy = coalesce(occupancy, 0))
 
 
     if (!dir.exists("../microdata")) {
