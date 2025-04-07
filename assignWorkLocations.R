@@ -65,7 +65,7 @@ assignWorkLocations <- function(outputDir, workers) {
   log_info("Calculate home to work sa3 counts")
   work_count_sa3 <- work_sa3_movement %>%
     select(sa3_home,sa3_work,pr_sa3) %>%
-    inner_join(home_count_sa3) %>%
+    inner_join(home_count_sa3, by=join_by(sa3_home)) %>%
     # filter(sa3_home==20601) %>%
     group_by(sa3_home) %>%
     mutate(work_count=roundPreserveSum(home_count*pr_sa3)) %>%
@@ -170,7 +170,8 @@ getWorkPr <- function(SA1_id,SA3_id) {
   
   # calculating distances
   
-  index <- distanceMatrixIndex[(as.numeric(SA1_id)), index]
+  index <- distanceMatrixIndex[.(as.numeric(SA1_id))] %>%
+    pull(index)
   distanceTable <- distanceMatrixIndexWork[sa3 == as.numeric(SA3_id)]
   distanceTable$distance <- distanceMatrixWork[index,distanceTable$index]
   distanceTally <- distanceTable %>%
@@ -190,7 +191,7 @@ getWorkPr <- function(SA1_id,SA3_id) {
   distanceTable <- distanceTable %>%
     inner_join(hist_sa3,by="distance") 
   if(sum(distanceTable$sa3_dist_pr)>0) {
-    distanceTable %>%
+    distanceTable <- distanceTable %>%
       mutate(sa3_dist_pr=sa3_dist_pr/sum(sa3_dist_pr,na.rm=T))
   }
   
