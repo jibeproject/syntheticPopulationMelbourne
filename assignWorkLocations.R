@@ -77,16 +77,11 @@ assignWorkLocations <- function(outputDir, workers) {
     group_by(sa3_home) %>%
     mutate(sa3_order=sample(1:n())) %>%
     ungroup()
-  
-  workers_sa3 <- workers %>%
-    arrange(PlanId) %>%
-    group_by(sa3_home) %>%
-    mutate(sa3_order=row_number()) %>%
-    ungroup() %>%
-    left_join(work_sa3, by=c("sa3_home","sa3_order"))
-  
-  
-  
+  workers_sa3 <- setDT(workers)[order(PlanId)][
+    , sa3_order := seq_len(.N), by = sa3_home
+  ][
+    work_sa3, on = .(sa3_home, sa3_order)
+  ]
   
   log_info("Assign workers SA1 locations ('Balanced')")
   
@@ -99,11 +94,11 @@ assignWorkLocations <- function(outputDir, workers) {
   globalDistCounter <<- data.table(distance=1:280,count=0)
   
   # workers_sa1 <- workers_sa3[1:1000,] %>% mutate(sa1_work=NA)
-  workers_sa1 <- workers_sa3[sample(nrow(workers_sa3)),] %>% mutate(sa1_work=as.numeric(NA))
+  workers_sa1 <- workers_sa3[sample(nrow(workers_sa3))][, sa1_work := as.numeric(NA)]
   
   # Initialize progress bar
   pb <- progress_bar$new(
-    format = "  [:bar] :current/:total (:percent; eta: :eta)",
+    format = "  [:bar] :current/:total (:percent; eta: :eta; :rate)",
     total = nrow(workers_sa1),
     clear = FALSE,
     width = 78
@@ -114,16 +109,23 @@ assignWorkLocations <- function(outputDir, workers) {
   
   while(i<nrow(workers_sa1)) {
     i<-i+1
-    SA1_id <- workers_sa1$SA1_MAINCODE_2016[i]
-    SA3_id <- workers_sa1$sa3_work[i]
-    workPr <- getWorkPr(SA1_id,SA3_id) %>%
-      mutate(overal_pr=(work_location_adj+2*sa3_dist_adj+2*global_dist_adj)/distance_proportion) %>%
-      mutate(overal_pr=overal_pr/sum(overal_pr,na.rm=T)) %>%
-      select(sa1_maincode_2016,distance,overal_pr)
+    SA1_id <- workers_sa1[i, SA1_MAINCODE_2016]
+    SA3_id <- workers_sa1[i, sa3_work]
+    workPr <- getWorkPr(SA1_id, SA3_id)[, 
+      .(
+        sa1_maincode_2016, 
+        distance, 
+        overal_pr = (
+          work_location_adj + 2 * sa3_dist_adj + 2 * global_dist_adj
+        ) / distance_proportion
+      )
+    ][
+      , overal_pr := overal_pr / sum(overal_pr, na.rm = TRUE)
+    ]
     destinationSA1 <- sample(workPr$sa1_maincode_2016, size=1, prob=workPr$overal_pr)
-    distanceDestination <- workPr[sa1_maincode_2016==destinationSA1]$distance
+    distanceDestination <- workPr[.(destinationSA1), on = .(sa1_maincode_2016), distance]
     setWorkCounters(SA1_id,destinationSA1,distanceDestination)
-    workers_sa1[i,]$sa1_work <- destinationSA1
+    workers_sa1[i, sa1_work := destinationSA1]
     # Update progress bar
     pb$tick()
   }
