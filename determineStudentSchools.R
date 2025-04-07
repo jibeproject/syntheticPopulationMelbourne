@@ -143,13 +143,13 @@ prepare_combined_school_enrolments <- function() {
                 id = jibeSchoolId,
                 zone = SA1_MAIN16,
                 type = case_when(
-                    Primary.Total > 0 & (is.na(Secondary.Total) | Secondary.Total == 0) ~ "1",
-                    Secondary.Total > 0 & (is.na(Primary.Total) | Primary.Total == 0) ~ "2",
-                    Primary.Total > 0 & Secondary.Total > 0 ~ "1,2",
+                    coalesce(Primary.Total,0) > 0 & coalesce(Secondary.Total,0)==0 ~ 1,
+                    coalesce(Secondary.Total,0) > 0 & coalesce(Primary.Total,0)==0  ~ 2,
+                    coalesce(Primary.Total,0)  > 0 & coalesce(Secondary.Total,0)  > 0 ~ "1,2",
                     TRUE ~ NA_character_
                 ),
                 capacity = NA,
-                occupancy = Primary.Total + Secondary.Total,
+                occupancy = coalesce(Primary.Total, 0) + coalesce(Secondary.Total, 0),
                 coordX = st_coordinates(geometry)[, 1],
                 coordY = st_coordinates(geometry)[, 2]
             ),
@@ -157,9 +157,9 @@ prepare_combined_school_enrolments <- function() {
             mutate(
                 id = jibeSchoolId,
                 zone = SA1_MAIN16,
-                type = "3",
+                type = 3,
                 capacity = NA,
-                occupancy = TOTAL,
+                occupancy = coalesce(TOTAL,0),
                 coordX = st_coordinates(geometry)[, 1],
                 coordY = st_coordinates(geometry)[, 2]
             )
