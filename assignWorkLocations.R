@@ -169,8 +169,8 @@ getWorkPr <- function(SA1_id,SA3_id) {
   SA3_home <- as.integer(substr(SA1_id,1,5))
   
   # calculating distances
-  index <- distanceMatrixIndex[.(as.numeric(SA1_id))] %>%
-    pull(index)
+  
+  index <- distanceMatrixIndex[(as.numeric(SA1_id)), index]
   distanceTable <- distanceMatrixIndexWork[sa3 == as.numeric(SA3_id)]
   distanceTable$distance <- distanceMatrixWork[index,distanceTable$index]
   distanceTally <- distanceTable %>%

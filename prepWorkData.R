@@ -52,9 +52,11 @@ prepWorkData <- function(outputDir) {
     offset_value <- (source_spacing/2) - (target_spacing/2)
     df %>%
       dplyr::filter(range_value>=range_min & range_value<=range_max) %>%
-      inner_join(tidyr::crossing(data.frame(range_value=seq(range_min,range_max,source_spacing)),
-                          data.frame(offset=seq(offset_value*-1,offset_value,target_spacing))),
-                 by="range_value") %>%
+      inner_join(tidyr::crossing(
+        data.frame(range_value=seq(range_min,range_max,source_spacing)),
+        data.frame(offset=seq(offset_value*-1,offset_value,target_spacing))),
+        by="range_value",
+        relationship = "many-to-many") %>%
       mutate(range_value=range_value+offset) %>%
       mutate(count=count/(source_spacing/target_spacing)) %>%
       dplyr::select(-offset)
@@ -136,7 +138,7 @@ prepWorkData <- function(outputDir) {
   indiciesTable <- data.table(index=distanceMatrixIndexWorkIndicies,index_new=seq(1,length(distanceMatrixIndexWorkIndicies)))
   
   distanceMatrixIndexWork <- distanceMatrixIndexWork %>%
-    inner_join(indiciesTable) %>%
+    inner_join(indiciesTable, by=join_by(index)) %>%
     select(sa1_maincode_2016,index=index_new,sa3)
   write.csv(distanceMatrixIndexWork,paste0(outputDir,"/distanceMatrixIndexWork.csv"),row.names=F)
   
@@ -146,8 +148,23 @@ prepWorkData <- function(outputDir) {
   # Make sure they're equal to the number of homes!
   
   distanceMatrix <<- readRDS(file="data/distanceMatrix.rds") # note '<<' to make it global
-  distanceMatrixInt <- apply(distanceMatrix,MARGIN=c(1,2),FUN=findInterval,vec=seq(0,163500,500))
-  saveRDS(distanceMatrixInt,paste0(outputDir,"/distanceMatrixBins.rds"))
+  
+  # Convert the matrix to a data.table in long format
+  distanceMatrixDT <- as.data.table(as.table(distanceMatrix)) # Convert matrix to long format
+
+  # Perform the interval calculation in a vectorized way
+  distanceMatrixDT[, V3 := findInterval(N, vec = seq(0, 163500, 500))]
+
+  # Convert back to a matrix
+  distanceMatrixInt <- matrix(
+    distanceMatrixDT$V3, 
+    nrow = nrow(distanceMatrix), 
+    ncol = ncol(distanceMatrix), 
+    dimnames = dimnames(distanceMatrix)
+  )
+
+  # Save the result
+  saveRDS(distanceMatrixInt, paste0(outputDir, "/distanceMatrixBins.rds"))
   
   distanceMatrixWork <- distanceMatrixInt[,distanceMatrixIndexWorkIndicies]
   saveRDS(distanceMatrixWork,paste0(outputDir,"/distanceMatrixWork.rds"))
