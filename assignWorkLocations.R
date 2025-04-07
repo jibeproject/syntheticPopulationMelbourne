@@ -38,11 +38,9 @@ assignWorkLocations <- function(outputDir, workers) {
   distanceMatrixWork <<- readRDS(file=paste0(outputDir,"/distanceMatrixWork.rds")) # note '<<' to make it global
   # Some SA1s ended up snapping their centroid to the same node in the road
   # network so we need to use an index.
-  distanceMatrixIndex <- read.csv(paste0(outputDir,"/distanceMatrixIndex.csv"))
-  distanceMatrixIndex<-data.table(distanceMatrixIndex)
+  distanceMatrixIndex <- fread(paste0(outputDir, "/distanceMatrixIndex.csv"))
   setkey(distanceMatrixIndex, sa1_maincode_2016)
-  distanceMatrixIndexWork <- read.csv(paste0(outputDir,"/distanceMatrixIndexWork.csv"))
-  distanceMatrixIndexWork<-data.table(distanceMatrixIndexWork)
+  distanceMatrixIndexWork <- fread(paste0(outputDir,"/distanceMatrixIndexWork.csv"))
   setkey(distanceMatrixIndexWork, sa1_maincode_2016)
   
   # assign work SA3 regions -------------------------------------------------
@@ -170,7 +168,7 @@ getWorkPr <- function(SA1_id,SA3_id) {
   
   # calculating distances
   
-  index <- distanceMatrixIndex[.(as.numeric(SA1_id))] %>%
+  index <- distanceMatrixIndex[.(bit64::as.integer64(SA1_id))] %>%
     pull(index)
   distanceTable <- distanceMatrixIndexWork[sa3 == as.numeric(SA3_id)]
   distanceTable$distance <- distanceMatrixWork[index,distanceTable$index]
