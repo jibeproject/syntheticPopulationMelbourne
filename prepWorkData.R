@@ -48,8 +48,8 @@ prepWorkData <- function(outputDir) {
   expandRange <- function(df,range_min,range_max,source_spacing,target_spacing=1) {
     offset_value <- (source_spacing/2) - (target_spacing/2)
     df %>%
-      filter(range_value>=range_min & range_value<=range_max) %>%
-      inner_join(crossing(data.frame(range_value=seq(range_min,range_max,source_spacing)),
+      dplyr::filter(range_value>=range_min & range_value<=range_max) %>%
+      inner_join(tidyr::crossing(data.frame(range_value=seq(range_min,range_max,source_spacing)),
                           data.frame(offset=seq(offset_value*-1,offset_value,target_spacing))),
                  by="range_value") %>%
       mutate(range_value=range_value+offset) %>%

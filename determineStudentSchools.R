@@ -54,8 +54,9 @@ determineStudentSchools <- function(population) {
     log_info("Setting up higher education schools")
     enrolments_higher_education <<- prepare_higher_education_schools()
 
-    log_info("Preparing combined school enrolments with export to geojson")
+    log_info("Preparing combined school enrolments with export to geojson and csv microdata")
     combined_school_enrolments <- prepare_combined_school_enrolments()
+    prepare_school_microdata()
 
     log_info("Allocating schools to students (this is can be a long running process)")
     population_schools <- allocateSchools(population_students[student_status==TRUE,])
@@ -135,37 +136,50 @@ prepare_combined_school_enrolments <- function() {
     ) %>%
         select(jibeSchoolId, SA1_MAINCODE_2016, primary_enrolments, secondary_enrolments, higher_education_enrolments)
     st_write(combined_enrolments, "../output/schools_by_type.geojson", delete_dsn = TRUE)
+}
 
+prepare_school_microdata <- function() {
     # Prepare CSV with fields: id, zone, type, enrolmentsMale, enrolmentsFemale, enrolmentsTotal, coordX, coordY 
-    combined_schools <- bind_rows(
-        enrolments_primary_secondary %>% 
+    primary_secondary <- enrolments_primary_secondary %>% 
             mutate(
                 id = jibeSchoolId,
                 zone = SA1_MAIN16,
                 type = case_when(
-                    coalesce(Primary.Total,0) > 0 & coalesce(Secondary.Total,0)==0 ~ 1,
-                    coalesce(Secondary.Total,0) > 0 & coalesce(Primary.Total,0)==0  ~ 2,
+                    coalesce(Primary.Total,0) > 0 & coalesce(Secondary.Total,0)==0 ~ "1",
+                    coalesce(Secondary.Total,0) > 0 & coalesce(Primary.Total,0)==0  ~ "2",
                     coalesce(Primary.Total,0)  > 0 & coalesce(Secondary.Total,0)  > 0 ~ "1,2",
                     TRUE ~ NA_character_
                 ),
                 capacity = NA,
                 occupancy = coalesce(Primary.Total, 0) + coalesce(Secondary.Total, 0),
-                coordX = st_coordinates(geometry)[, 1],
-                coordY = st_coordinates(geometry)[, 2]
-            ),
-        enrolments_higher_education %>%
+                coordX = st_coordinates(geometry)[1],
+                coordY = st_coordinates(geometry)[2]
+            )
+    higher_education <- enrolments_higher_education %>%
             mutate(
                 id = jibeSchoolId,
                 zone = SA1_MAIN16,
-                type = 3,
+                type = "3",
                 capacity = NA,
                 occupancy = coalesce(TOTAL,0),
-                coordX = st_coordinates(geometry)[, 1],
-                coordY = st_coordinates(geometry)[, 2]
+                coordX = st_coordinates(geometry)[1],
+                coordY = st_coordinates(geometry)[2]
             )
+
+    combined_schools <- bind_rows(
+        primary_secondary %>% 
+            st_drop_geometry() %>% 
+            select(id, zone, type, capacity, occupancy, coordX, coordY),
+        higher_education %>% 
+            st_drop_geometry() %>% 
+            select(id, zone, type, capacity, occupancy, coordX, coordY)
     )
 
-    write.csv('../output/schools.csv', combined_schools, row.names = FALSE)
+
+    if (!dir.exists("../microdata")) {
+        dir.create("../microdata", recursive = TRUE)
+    }
+    write.csv(combined_schools, paste0('../microdata/ss_', base_year, '.csv'), row.names = FALSE)
 }
 
 
