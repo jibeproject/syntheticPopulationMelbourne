@@ -57,7 +57,7 @@ determineStudentSchools <- function(population) {
     log_info("Preparing combined school enrolments with export to geojson")
     combined_school_enrolments <- prepare_combined_school_enrolments()
 
-    log_info("Allocating schools to students (this is a long running process; e.g. 16 hours for 1.1 million students)")
+    log_info("Allocating schools to students (this is can be a long running process)")
     population_schools <- allocateSchools(population_students[student_status==TRUE,])
 
     log_info("Joining the students with schools back to the population data")
@@ -145,7 +145,7 @@ prepare_summary_plot <- function(population_students, census_data) {
     summarise(
         total_students = sum(student_status, na.rm = TRUE),
         total_population = n(),
-        student_percentage = (total_students / total_population) * 100
+        student_proportion = (total_students / total_population)
     )
 
     census_student_summary<- census_data %>%
@@ -153,20 +153,30 @@ prepare_summary_plot <- function(population_students, census_data) {
     summarise(
         total_students = sum(total_student_count, na.rm = TRUE),
         total_population = sum(total_population, na.rm = TRUE),
-        student_percentage = (total_students / total_population) * 100
+        student_proportion = (total_students / total_population)
     )
     # Combine the two summaries into one tibble for comparison
     combined_summary <- bind_rows(
-    population_student_summary %>% mutate(Source = "Population"),
+    population_student_summary %>% mutate(Source = "Synthetic population"),
     census_student_summary %>% mutate(Source = "Census")
+    ) %>% 
+    mutate(age_cat = factor(
+        age_cat, 
+        levels = c(1:21),
+        labels = get_age_cat_labels())
     )
 
     # Plot the data
-    ggplot(combined_summary, aes(x = age_cat, y = student_percentage, color = Gender, linetype = Source)) +
+    ggplot(combined_summary, aes(
+        x = age_cat, 
+        y = student_proportion, 
+        color = Gender, 
+        linetype = Source,
+        group = interaction(Gender, Source))) +
     geom_line(linewidth = 1) +
     labs(
-        title = "Comparison of Student Percentage by Age and Gender",
-        x = "Age Category",
+        title = "Comparison of Census and Synthetic Population Students (%), by Age and Gender",
+        x = "Age group (years)",
         y = "Student Percentage",
         color = "Gender",
         linetype = "Source"
@@ -224,7 +234,11 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
     combined_summary <- bind_rows(population_summary, census_summary)
 
     # Join with zoneSystem geometries
-    choropleth_data <- zoneSystem %>%
+    zoneSystem_dissolved <- zoneSystem %>%
+    group_by(SA2_MAIN16, SA2_NAME16) %>%
+    summarise(geometry = st_union(geometry)) %>%
+    ungroup()
+    choropleth_data <- zoneSystem_dissolved %>%
         mutate(SA2_MAIN16 = as.integer(SA2_MAIN16)) %>%
         left_join(
             combined_summary, 
@@ -259,8 +273,11 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
         height = 8,
         units = "in"
     )
-  # Save the chorpleth data as a csv file
-    write.csv(choropleth_data, "../output/student_percentage_by_population_census_age_sa2.csv", row.names = FALSE)
+  # Save the chorpleth data as geojson
+  choropleth_data <- choropleth_data %>%
+    mutate(geometry = st_simplify(geometry, dTolerance = 100))  
+
+    st_write(choropleth_data, "../output/student_percentage_by_population_census_sa2.geojson", delete_dsn = TRUE)
 }
 
 prepare_census_data <- function(census_data_path) {

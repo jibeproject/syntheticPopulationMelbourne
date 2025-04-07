@@ -2,6 +2,7 @@
 library(dplyr)
 library(tidyr)
 library(data.table)
+library(logger)
 
 assignWorkLocations <- function(outputDir, workers) {
   
@@ -118,7 +119,7 @@ assignWorkLocations <- function(outputDir, workers) {
     distanceDestination <- workPr[sa1_maincode_2016==destinationSA1]$distance
     setWorkCounters(SA1_id,destinationSA1,distanceDestination)
     workers_sa1[i,]$sa1_work <- destinationSA1
-    if(i%%1000==0) cat(paste0("balanced ",i," at ",Sys.time(),"\n"))
+    if(i%%1000==0) loginfo(paste0("balanced ",i," of ",nrow(workers_sa1)," assigned"))
   }
   end_time <- Sys.time()
   end_time - start_time
