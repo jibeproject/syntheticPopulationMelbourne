@@ -77,6 +77,33 @@ get_age_cat_int_from_str <- function(age_str) {
     return(age_mapping[[age_str]])
 }
 
+get_age_cat_labels <- function() {
+    age_labels <- c(
+        "0-4 years",
+        "5-9 years",
+        "10-14 years",
+        "15-19 years",
+        "20-24 years",
+        "25-29 years",
+        "30-34 years",
+        "35-39 years",
+        "40-44 years",
+         "45-49 years",
+         "50-54 years",
+         "55-59 years",
+         "60-64 years",
+         "65-69 years",
+         "70-74 years",
+         "75-79 years",
+         "80-84 years",
+         "85-89 years",
+         "90-94 years",
+         "95-99 years",
+         "100 years and over"
+    )
+    return(age_labels)
+}
+
 get_age_cat_from_age <- function(Age) {
     # Determine the age category based on the age of the person
     age_category = case_when(
