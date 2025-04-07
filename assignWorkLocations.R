@@ -3,6 +3,7 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 library(logger)
+library(progress)
 
 assignWorkLocations <- function(outputDir, workers) {
   
@@ -25,9 +26,7 @@ assignWorkLocations <- function(outputDir, workers) {
     mutate(PlanId=AgentId) %>%
     dplyr::select(PlanId,SA1_MAINCODE_2016)
   workers$sa3_home <- as.integer(substr(workers$SA1_MAINCODE_2016,1,5))
-  workLocationsSA1 <- read.csv(paste0(outputDir,"/workLocationsSA1.csv")) %>%
-    select(sa1_maincode_2016,work_location_pr=sa3_pr)
-  workLocationsSA1<-data.table(workLocationsSA1)
+  workLocationsSA1 <- fread(paste0(outputDir, "/workLocationsSA1.csv"))[, .(sa1_maincode_2016, work_location_pr = sa3_pr)]
   setkey(workLocationsSA1, sa1_maincode_2016)
   
   
@@ -102,6 +101,14 @@ assignWorkLocations <- function(outputDir, workers) {
   # workers_sa1 <- workers_sa3[1:1000,] %>% mutate(sa1_work=NA)
   workers_sa1 <- workers_sa3[sample(nrow(workers_sa3)),] %>% mutate(sa1_work=as.numeric(NA))
   
+  # Initialize progress bar
+  pb <- progress_bar$new(
+    format = "  [:bar] :current/:total (:percent; eta: :eta)",
+    total = nrow(workers_sa1),
+    clear = FALSE,
+    width = 78
+  )
+
   i<-0
   start_time <- Sys.time()
   
@@ -117,11 +124,10 @@ assignWorkLocations <- function(outputDir, workers) {
     distanceDestination <- workPr[sa1_maincode_2016==destinationSA1]$distance
     setWorkCounters(SA1_id,destinationSA1,distanceDestination)
     workers_sa1[i,]$sa1_work <- destinationSA1
-    if(i%%1000==0) loginfo(paste0("balanced ",i," of ",nrow(workers_sa1)," assigned"))
+    # Update progress bar
+    pb$tick()
   }
-  end_time <- Sys.time()
-  end_time - start_time
-  
+  log_info("Saving datasets")
   saveRDS(workLocationCounter,paste0(outputDir,"/workLocationCounter_balanced.rds"))
   saveRDS(sa3DistCounter     ,paste0(outputDir,"/sa3DistCounter_balanced.rds"     ))
   saveRDS(globalDistCounter  ,paste0(outputDir,"/globalDistCounter_balanced.rds"  ))
@@ -192,13 +198,10 @@ getWorkPr <- function(SA1_id,SA3_id) {
     distanceTable <- distanceTable %>%
       mutate(sa3_dist_pr=sa3_dist_pr/sum(sa3_dist_pr,na.rm=T))
   }
-  
   #adding global distance Pr
   distanceTable <- distanceTable %>%
     inner_join(work_hist_global,by="distance") %>%
     mutate(global_dist_pr=global_dist_pr/sum(global_dist_pr,na.rm=T))
-  
-  
   
   # now have the raw probabilities 
   # sa1_maincode_2016, distance, distance_proportion, work_location_pr, sa3_dist_pr, global_dist_pr
@@ -228,12 +231,6 @@ selectWorkSA1 <- function(dataTable) {
   dataTable<-workPr
   # select SA1
   destinationSA1 <- sample(dataTable$sa1_maincode_2016, size=1, prob=dataTable$overal_pr)
-  
-  # add to counters
-  
-  
-  
-  
   return(destinationSA1)
 }
 
