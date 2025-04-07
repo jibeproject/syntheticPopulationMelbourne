@@ -6,11 +6,11 @@ library(logger)
 
 assignWorkLocations <- function(outputDir, workers) {
   
-  # Prepare census and other datasets to assign work locations.
+  log_info("Prepare census and other datasets to assign work locations.")
   source('prepWorkData.R', local=TRUE); 
   prepWorkData(outputDir)
 
-  # import data -------------------------------------------------------------
+  log_info("Import data")
   work_hist_global <- readRDS(paste0(outputDir,"/work_hist_global.rds")) %>%
     mutate(distance=row_number()) %>%
     select(distance,global_dist_pr=pr) %>%
@@ -33,7 +33,7 @@ assignWorkLocations <- function(outputDir, workers) {
   
   
   
-  #distances
+  log_info("Evaluate distances")
   # distanceMatrix <<- readRDS(file="data/distanceMatrix.rds") # note '<<' to make it global
   distanceMatrixWork <<- readRDS(file=paste0(outputDir,"/distanceMatrixWork.rds")) # note '<<' to make it global
   # Some SA1s ended up snapping their centroid to the same node in the road
@@ -62,7 +62,7 @@ assignWorkLocations <- function(outputDir, workers) {
     ungroup()
   
   
-  # calculate home to work sa3 counts
+  log_info("Calculate home to work sa3 counts")
   work_count_sa3 <- work_sa3_movement %>%
     select(sa3_home,sa3_work,pr_sa3) %>%
     inner_join(home_count_sa3) %>%
@@ -91,7 +91,7 @@ assignWorkLocations <- function(outputDir, workers) {
   
   
   
-  # balanced ----------------------------------------------------------------
+  log_info("Assign workers SA1 locations ('Balanced')")
   
   set.seed(10000)
   
