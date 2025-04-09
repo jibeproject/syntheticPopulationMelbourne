@@ -51,6 +51,7 @@ census_data_path = "abs/Melb 2016 - Student status by SA2 (UR) AGE5P SEXP/Melb 2
 
 
 determineStudentSchools <- function(population) {
+    log_info("Commencing student and school allocation")
     initial_columns <- colnames(population)
     new_columns <- c("student_status", "school_type", "school_grade", "assigned_school")
     log_info("Setting up census data")
