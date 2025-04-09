@@ -32,9 +32,7 @@ source('determineHouseholdCar.R', local=TRUE);
 population <- determineHouseholdCar(population)
 
 source('determineStudentSchools.R', local=TRUE);
-plan(multisession)
 population <- determineStudentSchools(population)
-plan(sequential)
 
 final_processed_population_data_file <-  paste0(outputDir,'/population_final.rds')
 saveRDS(population,final_processed_population_data_file)

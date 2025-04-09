@@ -1,11 +1,9 @@
 library(tidyverse)
 library(data.table)
 library(sf)
-library(furrr)
 library(logger)
 library(ggplot2)
-library(parallel)
-
+library(progress)
 # For testing
 # test<- population[sample(nrow(population),20),]
 
@@ -21,22 +19,6 @@ source(properties_file)
 # Set seed for reproducibility
 set.seed(12)
 
-# Create a lock to prevent concurrent access to shared resources
-lock <- new.env()
-lock$locked <- FALSE
-
-lock_acquire <- function(lock) {
-    while (lock$locked) {
-        Sys.sleep(0.001)
-    }
-    lock$locked <- TRUE
-}
-
-lock_release <- function(lock) {
-    lock$locked <- FALSE
-}
-
-
 # Load the zone system
 ## NOTE: Currently the provided shapefile only encompasses Greater Melbourne.
 ## This means, schools cannot be linked to SA1 areas surrounding Greater Melbourne, 
@@ -51,6 +33,7 @@ census_data_path = "abs/Melb 2016 - Student status by SA2 (UR) AGE5P SEXP/Melb 2
 
 
 determineStudentSchools <- function(population) {
+    log_info("Commencing student and school allocation")
     initial_columns <- colnames(population)
     new_columns <- c("student_status", "school_type", "school_grade", "assigned_school")
     log_info("Setting up census data")
@@ -572,9 +555,6 @@ allocateSchools <- function(population_students) {
     
     allocate_located_school <- function(id, school_dataset, allocated_enrolment_column) {
         # Given a school record, and a list of schools, update the allocated_enrolment_column in the schools data frame and return the jibeSchoolId of the assigned school.
-        lock_acquire(lock)  
-        on.exit(lock_release(lock))
-
         if (school_dataset=='primary_secondary') {
             enrolments <- primary_secondary[jibeSchoolId==id, get(allocated_enrolment_column)] 
             primary_secondary[jibeSchoolId==id, (allocated_enrolment_column):= enrolments + 1]
@@ -584,19 +564,32 @@ allocateSchools <- function(population_students) {
         } else {
             stop("Invalid school dataset")
         }
+        pb$tick()
         return(id)
     }
+
+    # Initialize progress bar
+    pb <- progress_bar$new(
+        format = "  [:bar] :current/:total (:percent; eta: :eta; :rate)",
+        total = nrow(population_schools),
+        clear = FALSE,
+        width = 78
+    )
+
 
     # Iterative assignment using a while loop
     iteration <- 1
     population_schools[, assigned_school := NA_integer_]
     while (any(is.na(population_schools$assigned_school))) {
-        log_info("Iteration {iteration}: Assigning schools to students...")
+        log_info("Assigning schools to students...")
         
         # Assign schools to students
-        population_schools[is.na(assigned_school), assigned_school := future_pmap_int(
-            .(sa1_zone_index, Gender, school_grade, school_type), 
-            locate_school
+        population_schools[is.na(assigned_school), assigned_school := mapply(
+            locate_school,
+            sa1_zone_index,
+            Gender,
+            school_grade,
+            school_type
         )]
 
         # Calculate the percentage of students assigned

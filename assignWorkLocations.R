@@ -6,7 +6,7 @@ library(logger)
 library(progress)
 
 assignWorkLocations <- function(outputDir, workers) {
-  
+  log_info("Commencing work location assignment")
   log_info("Prepare census and other datasets to assign work locations.")
   source('prepWorkData.R', local=TRUE); 
   prepWorkData(outputDir)
