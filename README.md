@@ -1,6 +1,9 @@
 # syntheticPopulationMelbourne
 Code for generating the synthetic population for the JIBE Melbourne model.
 
+## Status
+In progress (as of 2025-04-08 process has been run through to completion, but pending refinement due to remaining issues, including output in format for MITO/SILO purposes)
+
 ## Requirements
 - R 4.0.0 or higher
 - R packages: `install.packages(c('tidyverse','data.table','sf','furrr','logger','stringr','igraph','future')`
