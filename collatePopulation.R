@@ -5,6 +5,7 @@ suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(igraph))
 suppressPackageStartupMessages(library(future))
 suppressPackageStartupMessages(library(furrr))
+suppressPackageStartupMessages(library(logger))
 
 plan(multisession) 
 
@@ -16,11 +17,31 @@ collate2016Population <- function(plansFile=NA) {
     sa1s<-read.csv(plansFile)
     sa1s<-sa1s$SA1_7DIGCODE
   }
+
+  checkPopulationData <- function() {
+    population_folder <- "./data/melbourne-2016-population"
+    population_zip <- "./data/melbourne-2016-population.zip"
+    
+    # Check if the folder exists
+    if (!dir.exists(population_folder)) {
+      # If the folder doesn't exist, check for the zip file
+      if (file.exists(population_zip)) {
+        log_info("Extracting population data from zip file...")
+        unzip(population_zip, exdir = "./data")
+        log_info("Extraction complete.")
+      } else {
+        stop("Error: Population folder and zip file are both missing. Please provide './data/melbourne-2016-population.zip'.")
+      }
+    } else {
+      log_info(paste0("Source population folder exists: ", population_folder))
+    }
+  }
+  checkPopulationData()
   
   # get all the Melbourne 2016 persons files by SA2
   df<-data.frame(SA2=list.files(path='data', pattern = "\\persons.csv.gz$", recursive = TRUE, full.names = TRUE), stringsAsFactors=FALSE)
   persons<-NULL
-  echo(paste0("Collating the population from Melbourne's ", nrow(df), " SA2 areas\n"))
+  log_info(paste0("Collating the population from Melbourne's ", nrow(df), " SA2 areas\n"))
   persons_list <- future_map(df$SA2, ~ importPersons(.x, sa1s), .progress = TRUE)
   persons <- bind_rows(persons_list)
   cat('\n')
@@ -40,10 +61,10 @@ collate2016Population <- function(plansFile=NA) {
     mutate(across(c(PartnerId,MotherId,FatherId,ChildrenIds,RelativeIds), ~ ifelse(.x=="",NA,.x))) %>%
     inner_join(sa1s, by=c("SA1_7DIGCODE"="SA1_7DIGITCODE_2016"))
   
-  echo(paste0("Assigning households to ", nrow(persons_cleaned), " people (can take a while)\n"))
+  log_info(paste0("Assigning households to ", nrow(persons_cleaned), " people (can take a while)\n"))
   persons_with_hh <- assignHHids(persons_cleaned)
   
-  echo(paste0("Wrote ", nrow(persons), " sampled persons to DataFrame\n"))
+  log_info(paste0("Wrote ", nrow(persons), " sampled persons to DataFrame\n"))
   return(persons_with_hh)
 
 }
