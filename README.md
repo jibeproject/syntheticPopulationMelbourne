@@ -2,7 +2,7 @@
 Code for generating the synthetic population for the JIBE Melbourne model.
 
 ## Status
-In progress (as of 2025-04-08 process has been run through to completion, but pending refinement due to remaining issues, including output in format for MITO/SILO purposes)
+In progress (as of 2025-04-08 process has been run through to completion, but pending refinement due to remaining issues, including output in format for [MiTO](https://github.com/jibeproject/mito) and [SILO](https://github.com/jibeproject/silo) purposes)
 
 ## Requirements
 - R 4.0.0 or higher
