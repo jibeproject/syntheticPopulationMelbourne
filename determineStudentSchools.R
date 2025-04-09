@@ -8,6 +8,8 @@ library(ggplot2)
 # For testing
 # test<- population[sample(nrow(population),20),]
 
+outputDir <- "../output/synthetic_population"
+
 # load general purpose utility functions
 source("util.R")
 
@@ -135,7 +137,7 @@ prepare_combined_school_enrolments <- function() {
             )
     ) %>%
         select(jibeSchoolId, SA1_MAINCODE_2016, primary_enrolments, secondary_enrolments, higher_education_enrolments)
-    st_write(combined_enrolments, "../output/synthetic_population/schools_by_type.geojson", delete_dsn = TRUE)
+    st_write(combined_enrolments, paste0(outputDir,"/schools_by_type.geojson"), delete_dsn = TRUE)
 }
 
 prepare_school_microdata <- function(population_students) {
@@ -247,7 +249,9 @@ prepare_summary_plot <- function(population_students, census_data) {
         text = element_text(size = 12)
     )
     ggsave(
-        filename = "../output/synthetic_population/synthetic_population_and_census_student_percentage_by_age_gender.jpg",
+        filename = paste0(outputDir,
+            "/synthetic_population_and_census_student_percentage_by_age_gender.jpg"
+        ),
         plot = last_plot(),
         device = "jpg",
         width = 10,
@@ -329,7 +333,7 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
 
     # Save the plot
     ggsave(
-        filename = "../output/synthetic_population/spatial_student_percentage_by_sa2.jpg",
+        paste0(outputDir,"/spatial_student_percentage_by_sa2.jpg"),
         plot = choropleth_plot,
         device = "jpg",
         width = 12,
@@ -355,7 +359,7 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
             all.x = TRUE,  # Keep all geometries
         )
 
-    st_write(geojson, "../output/synthetic_population/student_percentage_by_population_census_sa2.geojson", delete_dsn = TRUE)
+    st_write(geojson, paste0(outputDir,"/student_percentage_by_population_census_sa2.geojson"), delete_dsn = TRUE)
 }
 
 prepare_census_data <- function(census_data_path) {
@@ -590,12 +594,12 @@ allocateSchools <- function(population_students) {
     
     st_write(
         primary_secondary %>% select(-sa1_catchment), 
-        "../output/synthetic_population/primary_secondary_schools_allocated.geojson", 
+        paste0(outputDir,"/primary_secondary_schools_allocated.geojson"), 
         delete_dsn = TRUE
     )
     st_write(
         higher_education %>% select(-sa1_catchment), 
-        "../output/synthetic_population/higher_education_schools_allocated.geojson", 
+        paste0(outputDir,"/higher_education_schools_allocated.geojson"), 
         delete_dsn = TRUE
     )
     return(population_schools)
