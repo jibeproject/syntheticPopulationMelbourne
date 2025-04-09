@@ -4,6 +4,7 @@ library(sf)
 library(furrr)
 library(logger)
 library(ggplot2)
+library(parallel)
 
 # For testing
 # test<- population[sample(nrow(population),20),]
@@ -19,6 +20,22 @@ source(properties_file)
 
 # Set seed for reproducibility
 set.seed(12)
+
+# Create a lock to prevent concurrent access to shared resources
+lock <- new.env()
+lock$locked <- FALSE
+
+lock_acquire <- function(lock) {
+    while (lock$locked) {
+        Sys.sleep(0.001)
+    }
+    lock$locked <- TRUE
+}
+
+lock_release <- function(lock) {
+    lock$locked <- FALSE
+}
+
 
 # Load the zone system
 ## NOTE: Currently the provided shapefile only encompasses Greater Melbourne.
@@ -169,15 +186,16 @@ prepare_school_microdata <- function(population_students) {
                 coordX = st_coordinates(geometry)[1],
                 coordY = st_coordinates(geometry)[2]
             )
-
+    columns <- c("id", "zone", "type", "capacity", "occupancy", "coordX", "coordY")
     combined_schools <- bind_rows(
         primary_secondary %>% 
             st_drop_geometry() %>% 
-            select(id, zone, type, capacity, occupancy, coordX, coordY),
+            select(all_of(columns)),
         higher_education %>% 
             st_drop_geometry() %>% 
-            select(id, zone, type, capacity, occupancy, coordX, coordY)
+            select(all_of(columns))
     )
+    
 
     # Calculate occupancy for each school based on assigned students
     school_occupancy <- population_students %>%
@@ -189,13 +207,13 @@ prepare_school_microdata <- function(population_students) {
     # Update the occupancy in the combined_schools data
     combined_schools <- combined_schools %>%
         left_join(school_occupancy, by = "id") %>%
-        mutate(occupancy = coalesce(occupancy, 0))
+        mutate(occupancy = coalesce(occupancy.y, 0))
 
 
     if (!dir.exists("../microdata")) {
         dir.create("../microdata", recursive = TRUE)
     }
-    write.csv(combined_schools, paste0('../microdata/ss_', base_year, '.csv'), row.names = FALSE)
+    write.csv(combined_schools[columns], paste0('../microdata/ss_', base_year, '.csv'), row.names = FALSE)
 }
 
 
@@ -554,6 +572,8 @@ allocateSchools <- function(population_students) {
     
     allocate_located_school <- function(id, school_dataset, allocated_enrolment_column) {
         # Given a school record, and a list of schools, update the allocated_enrolment_column in the schools data frame and return the jibeSchoolId of the assigned school.
+        lock_acquire(lock)  
+        on.exit(lock_release(lock))
 
         if (school_dataset=='primary_secondary') {
             enrolments <- primary_secondary[jibeSchoolId==id, get(allocated_enrolment_column)] 
