@@ -1,8 +1,9 @@
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(logger))
 
 determineEducationLevel <- function(population) {
  
-  echo(paste0("Injesting population data\n"))
+  log_info("Commencing education level assignment")
   
   population_education_count <- population %>%
     group_by(SA2_MAINCODE,Gender,age_cat) %>%
@@ -50,7 +51,7 @@ determineEducationLevel <- function(population) {
   
   set.seed(12)
   
-  echo(paste0("Performing join on ", nrow(population), " sampled persons\n"))
+  log_info(paste0("Performing join on ", nrow(population), " sampled persons"))
   
   population_education_joined <- population %>%
     inner_join(education_count, by=c("SA2_MAINCODE","Gender","age_cat")) %>%
@@ -63,7 +64,7 @@ determineEducationLevel <- function(population) {
     arrange(SA2_MAINCODE,Gender,age_cat,random_sample) %>%
     select(-pop_count,-low_count,-medium_count,-high_count,-random_sample)
   
-  echo(paste0("Wrote ", nrow(population_education_joined), " sampled persons to DataFrame"))
+  log_info(paste0("Wrote ", nrow(population_education_joined), " sampled persons to DataFrame"))
   return(population_education_joined)
   
 }

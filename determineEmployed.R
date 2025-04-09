@@ -1,10 +1,11 @@
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(logger))
 # suppressPackageStartupMessages(library(tidyr))
 # suppressPackageStartupMessages(library(tibble))
 
 determineEmployed <- function(population) {
  
-  echo(paste0("Injesting population data\n"))  
+  log_info("Commencing employment status assignment")
 
   population_employed <- population %>%
     dplyr::mutate(age_cat = case_when(Age <   5             ~  1,
@@ -71,7 +72,7 @@ determineEmployed <- function(population) {
   
   set.seed(12)
   
-  echo(paste0("Performing join on ", nrow(population_employed), " sampled persons\n"))
+  log_info(paste0("Performing join on ", nrow(population_employed), " sampled persons"))
   
   population_employed_joined <- population_employed %>%
     inner_join(work_count, by=c("SA2_MAINCODE","Gender","age_cat")) %>%
@@ -83,7 +84,7 @@ determineEmployed <- function(population) {
     arrange(SA2_MAINCODE,Gender,age_cat,random_sample) %>%
     dplyr::select(-pop_count,-employment_count,-random_sample)
   
-  echo(paste0("Wrote ", nrow(population_employed_joined), " sampled persons to DataFrame\n"))
+  log_info(paste0("Wrote ", nrow(population_employed_joined), " sampled persons to DataFrame"))
   return(population_employed_joined)
   
 }

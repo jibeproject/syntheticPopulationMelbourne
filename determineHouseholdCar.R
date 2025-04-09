@@ -1,8 +1,9 @@
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(logger))
 
 determineHouseholdCar <- function(population) {
  
-  echo(paste0("Injesting population data\n"))
+  log_info("Commencing household size and car attribute assignment")
   
   population <- population%>%
     left_join(read.csv("abs/melb_sa1_IRSAD_2016.csv")%>%
@@ -56,7 +57,7 @@ determineHouseholdCar <- function(population) {
   
   set.seed(12)
   
-  echo(paste0("Performing join on ", nrow(household), " sampled persons, may take a while\n"))
+  log_info(paste0("Performing join on ", nrow(household), " sampled persons"))
   
   household_hhCar_joined <- household %>%
     inner_join(household_count_joined, by=c("SA2_MAINCODE","hhSize")) %>%
@@ -113,7 +114,7 @@ determineHouseholdCar <- function(population) {
     left_join(household_hhCar_joined%>%
                 select(HouseholdId,hhCar))
   
-  echo(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to DataFrame\n"))
+  log_info(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to DataFrame"))
   return(population_hhCar_joined)
   
 }
