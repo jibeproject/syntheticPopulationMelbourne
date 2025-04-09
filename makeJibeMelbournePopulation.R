@@ -10,7 +10,7 @@ options(future.globals.maxSize = 1024 * 1024 * 1024) # 1 GB
 # load general purpose utility functions
 source("util.R")
 
-outputDir="../output"
+outputDir="../output/synthetic_population"
 
 dir.create(outputDir, showWarnings = FALSE, recursive=TRUE)
 
