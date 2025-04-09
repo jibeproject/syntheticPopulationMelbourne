@@ -4,9 +4,12 @@ library(sf)
 library(furrr)
 library(logger)
 library(ggplot2)
+library(parallel)
 
 # For testing
 # test<- population[sample(nrow(population),20),]
+
+outputDir <- "../output/synthetic_population"
 
 # load general purpose utility functions
 source("util.R")
@@ -17,6 +20,22 @@ source(properties_file)
 
 # Set seed for reproducibility
 set.seed(12)
+
+# Create a lock to prevent concurrent access to shared resources
+lock <- new.env()
+lock$locked <- FALSE
+
+lock_acquire <- function(lock) {
+    while (lock$locked) {
+        Sys.sleep(0.001)
+    }
+    lock$locked <- TRUE
+}
+
+lock_release <- function(lock) {
+    lock$locked <- FALSE
+}
+
 
 # Load the zone system
 ## NOTE: Currently the provided shapefile only encompasses Greater Melbourne.
@@ -56,7 +75,6 @@ determineStudentSchools <- function(population) {
 
     log_info("Preparing combined school enrolments with export to geojson and csv microdata")
     combined_school_enrolments <- prepare_combined_school_enrolments()
-    prepare_school_microdata()
 
     log_info("Allocating schools to students (this is can be a long running process)")
     population_schools <- allocateSchools(population_students[student_status==TRUE,])
@@ -70,11 +88,12 @@ determineStudentSchools <- function(population) {
     )
     population_students <- population_students %>% as_tibble() %>% select(all_of(c(initial_columns,new_columns)))
 
-    log_info("Saving summary plots and csv: ../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg")
+    log_info("Saving summary plots and csv: ../output/synthetic_population/synthetic_population_and_census_student_percentage_by_age_gender.jpg")
     prepare_summary_plot(population_students, census_data)
     prepare_spatial_summary_plot(population_students, census_data, zoneSystem) 
 
     log_info("Returning the population data with schools assigned.")
+    prepare_school_microdata(population_students)
     return (population_students)
 }
 
@@ -135,11 +154,13 @@ prepare_combined_school_enrolments <- function() {
             )
     ) %>%
         select(jibeSchoolId, SA1_MAINCODE_2016, primary_enrolments, secondary_enrolments, higher_education_enrolments)
-    st_write(combined_enrolments, "../output/schools_by_type.geojson", delete_dsn = TRUE)
+    st_write(combined_enrolments, paste0(outputDir,"/schools_by_type.geojson"), delete_dsn = TRUE)
 }
 
-prepare_school_microdata <- function() {
+prepare_school_microdata <- function(population_students) {
     # Prepare CSV with fields: id, zone, type, enrolmentsMale, enrolmentsFemale, enrolmentsTotal, coordX, coordY 
+    # Actual capacity is not known; using 2018 enrolments as a proxy for capacity
+    # Occupancy will be completed using the allocations in the synthetic population
     primary_secondary <- enrolments_primary_secondary %>% 
             mutate(
                 id = jibeSchoolId,
@@ -150,8 +171,8 @@ prepare_school_microdata <- function() {
                     coalesce(Primary.Total,0)  > 0 & coalesce(Secondary.Total,0)  > 0 ~ "1,2",
                     TRUE ~ NA_character_
                 ),
-                capacity = NA,
-                occupancy = coalesce(Primary.Total, 0) + coalesce(Secondary.Total, 0),
+                capacity = coalesce(Primary.Total, 0) + coalesce(Secondary.Total, 0),
+                occupancy = NA,
                 coordX = st_coordinates(geometry)[1],
                 coordY = st_coordinates(geometry)[2]
             )
@@ -160,26 +181,39 @@ prepare_school_microdata <- function() {
                 id = jibeSchoolId,
                 zone = SA1_MAIN16,
                 type = "3",
-                capacity = NA,
-                occupancy = coalesce(TOTAL,0),
+                capacity = coalesce(TOTAL,0),
+                occupancy = NA,
                 coordX = st_coordinates(geometry)[1],
                 coordY = st_coordinates(geometry)[2]
             )
-
+    columns <- c("id", "zone", "type", "capacity", "occupancy", "coordX", "coordY")
     combined_schools <- bind_rows(
         primary_secondary %>% 
             st_drop_geometry() %>% 
-            select(id, zone, type, capacity, occupancy, coordX, coordY),
+            select(all_of(columns)),
         higher_education %>% 
             st_drop_geometry() %>% 
-            select(id, zone, type, capacity, occupancy, coordX, coordY)
+            select(all_of(columns))
     )
+    
+
+    # Calculate occupancy for each school based on assigned students
+    school_occupancy <- population_students %>%
+        filter(!is.na(assigned_school)) %>%
+        group_by(assigned_school) %>%
+        summarise(occupancy = n()) %>%
+        rename(id = assigned_school)
+
+    # Update the occupancy in the combined_schools data
+    combined_schools <- combined_schools %>%
+        left_join(school_occupancy, by = "id") %>%
+        mutate(occupancy = coalesce(occupancy.y, 0))
 
 
     if (!dir.exists("../microdata")) {
         dir.create("../microdata", recursive = TRUE)
     }
-    write.csv(combined_schools, paste0('../microdata/ss_', base_year, '.csv'), row.names = FALSE)
+    write.csv(combined_schools[columns], paste0('../microdata/ss_', base_year, '.csv'), row.names = FALSE)
 }
 
 
@@ -233,7 +267,9 @@ prepare_summary_plot <- function(population_students, census_data) {
         text = element_text(size = 12)
     )
     ggsave(
-        filename = "../output/synthetic_population_and_census_student_percentage_by_age_gender.jpg",
+        filename = paste0(outputDir,
+            "/synthetic_population_and_census_student_percentage_by_age_gender.jpg"
+        ),
         plot = last_plot(),
         device = "jpg",
         width = 10,
@@ -315,7 +351,7 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
 
     # Save the plot
     ggsave(
-        filename = "../output/spatial_student_percentage_by_sa2.jpg",
+        paste0(outputDir,"/spatial_student_percentage_by_sa2.jpg"),
         plot = choropleth_plot,
         device = "jpg",
         width = 12,
@@ -341,7 +377,7 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
             all.x = TRUE,  # Keep all geometries
         )
 
-    st_write(geojson, "../output/student_percentage_by_population_census_sa2.geojson", delete_dsn = TRUE)
+    st_write(geojson, paste0(outputDir,"/student_percentage_by_population_census_sa2.geojson"), delete_dsn = TRUE)
 }
 
 prepare_census_data <- function(census_data_path) {
@@ -536,6 +572,8 @@ allocateSchools <- function(population_students) {
     
     allocate_located_school <- function(id, school_dataset, allocated_enrolment_column) {
         # Given a school record, and a list of schools, update the allocated_enrolment_column in the schools data frame and return the jibeSchoolId of the assigned school.
+        lock_acquire(lock)  
+        on.exit(lock_release(lock))
 
         if (school_dataset=='primary_secondary') {
             enrolments <- primary_secondary[jibeSchoolId==id, get(allocated_enrolment_column)] 
@@ -576,12 +614,12 @@ allocateSchools <- function(population_students) {
     
     st_write(
         primary_secondary %>% select(-sa1_catchment), 
-        "../output/primary_secondary_schools_allocated.geojson", 
+        paste0(outputDir,"/primary_secondary_schools_allocated.geojson"), 
         delete_dsn = TRUE
     )
     st_write(
         higher_education %>% select(-sa1_catchment), 
-        "../output/higher_education_schools_allocated.geojson", 
+        paste0(outputDir,"/higher_education_schools_allocated.geojson"), 
         delete_dsn = TRUE
     )
     return(population_schools)

@@ -3,6 +3,7 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 library(logger)
+library(progress)
 
 assignWorkLocations <- function(outputDir, workers) {
   
@@ -25,9 +26,7 @@ assignWorkLocations <- function(outputDir, workers) {
     mutate(PlanId=AgentId) %>%
     dplyr::select(PlanId,SA1_MAINCODE_2016)
   workers$sa3_home <- as.integer(substr(workers$SA1_MAINCODE_2016,1,5))
-  workLocationsSA1 <- read.csv(paste0(outputDir,"/workLocationsSA1.csv")) %>%
-    select(sa1_maincode_2016,work_location_pr=sa3_pr)
-  workLocationsSA1<-data.table(workLocationsSA1)
+  workLocationsSA1 <- fread(paste0(outputDir, "/workLocationsSA1.csv"))[, .(sa1_maincode_2016, work_location_pr = sa3_pr)]
   setkey(workLocationsSA1, sa1_maincode_2016)
   
   
@@ -38,11 +37,9 @@ assignWorkLocations <- function(outputDir, workers) {
   distanceMatrixWork <<- readRDS(file=paste0(outputDir,"/distanceMatrixWork.rds")) # note '<<' to make it global
   # Some SA1s ended up snapping their centroid to the same node in the road
   # network so we need to use an index.
-  distanceMatrixIndex <- read.csv(paste0(outputDir,"/distanceMatrixIndex.csv"))
-  distanceMatrixIndex<-data.table(distanceMatrixIndex)
+  distanceMatrixIndex <<- fread(paste0(outputDir, "/distanceMatrixIndex.csv"))
   setkey(distanceMatrixIndex, sa1_maincode_2016)
-  distanceMatrixIndexWork <- read.csv(paste0(outputDir,"/distanceMatrixIndexWork.csv"))
-  distanceMatrixIndexWork<-data.table(distanceMatrixIndexWork)
+  distanceMatrixIndexWork <<- fread(paste0(outputDir,"/distanceMatrixIndexWork.csv"))
   setkey(distanceMatrixIndexWork, sa1_maincode_2016)
   
   # assign work SA3 regions -------------------------------------------------
@@ -65,7 +62,7 @@ assignWorkLocations <- function(outputDir, workers) {
   log_info("Calculate home to work sa3 counts")
   work_count_sa3 <- work_sa3_movement %>%
     select(sa3_home,sa3_work,pr_sa3) %>%
-    inner_join(home_count_sa3) %>%
+    inner_join(home_count_sa3, by=join_by(sa3_home)) %>%
     # filter(sa3_home==20601) %>%
     group_by(sa3_home) %>%
     mutate(work_count=roundPreserveSum(home_count*pr_sa3)) %>%
@@ -80,16 +77,11 @@ assignWorkLocations <- function(outputDir, workers) {
     group_by(sa3_home) %>%
     mutate(sa3_order=sample(1:n())) %>%
     ungroup()
-  
-  workers_sa3 <- workers %>%
-    arrange(PlanId) %>%
-    group_by(sa3_home) %>%
-    mutate(sa3_order=row_number()) %>%
-    ungroup() %>%
-    left_join(work_sa3, by=c("sa3_home","sa3_order"))
-  
-  
-  
+  workers_sa3 <- setDT(workers)[order(PlanId)][
+    , sa3_order := seq_len(.N), by = sa3_home
+  ][
+    work_sa3, on = .(sa3_home, sa3_order)
+  ]
   
   log_info("Assign workers SA1 locations ('Balanced')")
   
@@ -102,28 +94,42 @@ assignWorkLocations <- function(outputDir, workers) {
   globalDistCounter <<- data.table(distance=1:280,count=0)
   
   # workers_sa1 <- workers_sa3[1:1000,] %>% mutate(sa1_work=NA)
-  workers_sa1 <- workers_sa3[sample(nrow(workers_sa3)),] %>% mutate(sa1_work=as.numeric(NA))
+  workers_sa1 <- workers_sa3[sample(nrow(workers_sa3))][, sa1_work := as.numeric(NA)]
   
+  # Initialize progress bar
+  pb <- progress_bar$new(
+    format = "  [:bar] :current/:total (:percent; eta: :eta; :rate)",
+    total = nrow(workers_sa1),
+    clear = FALSE,
+    width = 78
+  )
+
   i<-0
   start_time <- Sys.time()
   
   while(i<nrow(workers_sa1)) {
     i<-i+1
-    SA1_id <- workers_sa1$SA1_MAINCODE_2016[i]
-    SA3_id <- workers_sa1$sa3_work[i]
-    workPr <- getWorkPr(SA1_id,SA3_id) %>%
-      mutate(overal_pr=(work_location_adj+2*sa3_dist_adj+2*global_dist_adj)/distance_proportion) %>%
-      mutate(overal_pr=overal_pr/sum(overal_pr,na.rm=T)) %>%
-      select(sa1_maincode_2016,distance,overal_pr)
+    SA1_id <- workers_sa1[i, SA1_MAINCODE_2016]
+    SA3_id <- workers_sa1[i, sa3_work]
+    workPr <- getWorkPr(SA1_id, SA3_id)[, 
+      .(
+        sa1_maincode_2016, 
+        distance, 
+        overal_pr = (
+          work_location_adj + 2 * sa3_dist_adj + 2 * global_dist_adj
+        ) / distance_proportion
+      )
+    ][
+      , overal_pr := overal_pr / sum(overal_pr, na.rm = TRUE)
+    ]
     destinationSA1 <- sample(workPr$sa1_maincode_2016, size=1, prob=workPr$overal_pr)
-    distanceDestination <- workPr[sa1_maincode_2016==destinationSA1]$distance
+    distanceDestination <- workPr[.(destinationSA1), on = .(sa1_maincode_2016), distance]
     setWorkCounters(SA1_id,destinationSA1,distanceDestination)
-    workers_sa1[i,]$sa1_work <- destinationSA1
-    if(i%%1000==0) loginfo(paste0("balanced ",i," of ",nrow(workers_sa1)," assigned"))
+    workers_sa1[i, sa1_work := destinationSA1]
+    # Update progress bar
+    pb$tick()
   }
-  end_time <- Sys.time()
-  end_time - start_time
-  
+  log_info("Saving datasets")
   saveRDS(workLocationCounter,paste0(outputDir,"/workLocationCounter_balanced.rds"))
   saveRDS(sa3DistCounter     ,paste0(outputDir,"/sa3DistCounter_balanced.rds"     ))
   saveRDS(globalDistCounter  ,paste0(outputDir,"/globalDistCounter_balanced.rds"  ))
@@ -169,7 +175,8 @@ getWorkPr <- function(SA1_id,SA3_id) {
   SA3_home <- as.integer(substr(SA1_id,1,5))
   
   # calculating distances
-  index <- distanceMatrixIndex[.(as.numeric(SA1_id))] %>%
+  
+  index <- distanceMatrixIndex[.(bit64::as.integer64(SA1_id))] %>%
     pull(index)
   distanceTable <- distanceMatrixIndexWork[sa3 == as.numeric(SA3_id)]
   distanceTable$distance <- distanceMatrixWork[index,distanceTable$index]
@@ -190,16 +197,13 @@ getWorkPr <- function(SA1_id,SA3_id) {
   distanceTable <- distanceTable %>%
     inner_join(hist_sa3,by="distance") 
   if(sum(distanceTable$sa3_dist_pr)>0) {
-    distanceTable %>%
+    distanceTable <- distanceTable %>%
       mutate(sa3_dist_pr=sa3_dist_pr/sum(sa3_dist_pr,na.rm=T))
   }
-  
   #adding global distance Pr
   distanceTable <- distanceTable %>%
     inner_join(work_hist_global,by="distance") %>%
     mutate(global_dist_pr=global_dist_pr/sum(global_dist_pr,na.rm=T))
-  
-  
   
   # now have the raw probabilities 
   # sa1_maincode_2016, distance, distance_proportion, work_location_pr, sa3_dist_pr, global_dist_pr
@@ -229,12 +233,6 @@ selectWorkSA1 <- function(dataTable) {
   dataTable<-workPr
   # select SA1
   destinationSA1 <- sample(dataTable$sa1_maincode_2016, size=1, prob=dataTable$overal_pr)
-  
-  # add to counters
-  
-  
-  
-  
   return(destinationSA1)
 }
 
