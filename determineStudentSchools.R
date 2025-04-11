@@ -530,7 +530,7 @@ allocateSchools <- function(population_students) {
             stop("Invalid school type")
         }
         if (nrow(potential_schools) == 0) {
-            stop(paste0("No potential schools found: Gender",Gender, "School Type", school_type, "School Grade", school_grade))
+            return(-777)
         }
         sa1_schools <- potential_schools[
             SA1_MAIN16==zone_system[sa1_zone_index, SA1_MAIN16],
@@ -590,12 +590,11 @@ allocateSchools <- function(population_students) {
     # Initialize progress bar
     pb <- progress_bar$new(
         format = "  [:bar] :current/:total (:percent; eta: :eta; :rate)",
-        total = nrow(population_schools),
+        total = nrow(population_schools[is.na(assigned_school),]),
         clear = FALSE,
         width = 78
     )
 
-    # Parallel processing with furrr
     log_info("Assigning schools to students...")
     counter <<- 0
     # Assign schools to students
@@ -607,7 +606,6 @@ allocateSchools <- function(population_students) {
         school_type
     )]
 
-    # Calculate the percentage of students assigned
     assigned_percentage <- 100 * sum(!is.na(population_schools$assigned_school)) / nrow(population_schools)
     log_info("{assigned_percentage}% of students have been assigned schools.")
     
