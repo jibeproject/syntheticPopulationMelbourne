@@ -354,10 +354,9 @@ prepare_spatial_summary_plot <- function(population_students, census_data, zoneS
 
     # Join with zoneSystem geometries
     geojson <- zoneSystem_dissolved %>%
-        left_join(
+        dplyr::left_join(
             combined_summary_wide, 
-            by = c("SA2_MAIN16" = "SA2_MAINCODE"),
-            all.x = TRUE,  # Keep all geometries
+            by = c("SA2_MAIN16" = "SA2_MAINCODE")
         )
 
     st_write(geojson, paste0(outputDir,"/student_percentage_by_population_census_sa2.geojson"), delete_dsn = TRUE)
