@@ -514,7 +514,7 @@ allocateSchools <- function(population_students) {
             capacity_multiplier <- 1.21 
             potential_schools <- higher_education[
                 get(enrolment_column) > 0 & 
-                get(allocated_enrolment_column)*capacity_multiplier < get(enrolment_column)
+                get(allocated_enrolment_column) < get(enrolment_column)*capacity_multiplier
             ]
         } else if (school_type %in% c(1,2)) {
             school_data <- 'primary_secondary'
