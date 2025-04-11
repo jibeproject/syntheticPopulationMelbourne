@@ -12,7 +12,7 @@ assignWorkLocations <- function(outputDir, workers) {
   prepWorkData(outputDir)
 
   log_info("Import data")
-  work_hist_global <- readRDS(paste0(outputDir,"/work_hist_global.rds")) %>%
+  work_hist_global <<- readRDS(paste0(outputDir,"/work_hist_global.rds")) %>%
     mutate(distance=row_number()) %>%
     select(distance,global_dist_pr=pr) %>%
     data.table()
@@ -26,11 +26,8 @@ assignWorkLocations <- function(outputDir, workers) {
     mutate(PlanId=AgentId) %>%
     dplyr::select(PlanId,SA1_MAINCODE_2016)
   workers$sa3_home <- as.integer(substr(workers$SA1_MAINCODE_2016,1,5))
-  workLocationsSA1 <- fread(paste0(outputDir, "/workLocationsSA1.csv"))[, .(sa1_maincode_2016, work_location_pr = sa3_pr)]
+  workLocationsSA1 <<- fread(paste0(outputDir, "/workLocationsSA1.csv"))[, .(sa1_maincode_2016, work_location_pr = sa3_pr)]
   setkey(workLocationsSA1, sa1_maincode_2016)
-  
-  
-  
   
   log_info("Evaluate distances")
   # distanceMatrix <<- readRDS(file="data/distanceMatrix.rds") # note '<<' to make it global
@@ -43,7 +40,7 @@ assignWorkLocations <- function(outputDir, workers) {
   setkey(distanceMatrixIndexWork, sa1_maincode_2016)
   
   # assign work SA3 regions -------------------------------------------------
-  work_hist_sa3_wide <- work_hist_sa3 %>%
+  work_hist_sa3_wide <<- work_hist_sa3 %>%
     pivot_wider(id_cols=c(sa3_home,sa3_work),
                 names_from=range_value,
                 values_from=pr) %>%
