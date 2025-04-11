@@ -484,8 +484,15 @@ allocateSchools <- function(population_students) {
     primary_secondary <- compute_buffers(zoneSystem, primary_secondary, 1600)
     higher_education <- compute_buffers(zoneSystem, higher_education, 1600)
 
-    primary_secondary[, allocated_enrolments_Male := 0]
-    primary_secondary[, allocated_enrolments_Female := 0]
+    # Initialize allocated enrolments for primary and secondary schools by grade and gender
+    grades <- c("Prep", "Year.1", "Year.2", "Year.3", "Year.4", "Year.5", "Year.6","Year.7", "Year.8", "Year.9", "Year.10", "Year.11", "Year.12")
+    genders <- c("Male", "Female")
+    for (grade in grades) {
+        for (gender in genders) {
+            col_name <- paste0("allocated_",grade, ".", gender, "s.Total")
+            primary_secondary[, (col_name) := 0]
+        }
+    }
     higher_education[, allocated_enrolments_Male := 0]
     higher_education[, allocated_enrolments_Female := 0]
 
@@ -503,20 +510,27 @@ allocateSchools <- function(population_students) {
             school_data <- 'higher_education'
             enrolment_column <- Gender
             allocated_enrolment_column <- paste0('allocated_enrolments_',Gender)
+            # see https://github.com/jibeproject/syntheticPopulationMelbourne/issues/20
+            capacity_multiplier <- 1.21 
             potential_schools <- higher_education[
                 get(enrolment_column) > 0 & 
-                get(allocated_enrolment_column) < get(enrolment_column)
+                get(allocated_enrolment_column) < get(enrolment_column)*capacity_multiplier
             ]
         } else if (school_type %in% c(1,2)) {
             school_data <- 'primary_secondary'
             enrolment_column <- paste0(school_grade, ".", Gender, "s.Total")
             allocated_enrolment_column <- paste0('allocated_enrolments_',Gender)
+            allocated_enrolment_column <- paste0("allocated_",school_grade, ".", Gender, "s.Total")
+    
             potential_schools <- primary_secondary[
                 get(enrolment_column) > 0 & 
                 get(allocated_enrolment_column) < get(enrolment_column)
             ]
         } else {
             stop("Invalid school type")
+        }
+        if (nrow(potential_schools) == 0) {
+            return(-777)
         }
         sa1_schools <- potential_schools[
             SA1_MAIN16==zone_system[sa1_zone_index, SA1_MAIN16],
@@ -564,46 +578,36 @@ allocateSchools <- function(population_students) {
         } else {
             stop("Invalid school dataset")
         }
-        pb$tick()
+        counter <<- counter + 1  # Increment the counter
+        if (counter %% 100 == 0) {
+            pb$tick(100)  # Update the progress bar every 10 records
+        }
         return(id)
     }
 
+    population_schools[, assigned_school := NA_integer_]
+    
     # Initialize progress bar
     pb <- progress_bar$new(
         format = "  [:bar] :current/:total (:percent; eta: :eta; :rate)",
-        total = nrow(population_schools),
+        total = nrow(population_schools[is.na(assigned_school),]),
         clear = FALSE,
         width = 78
     )
 
+    log_info("Assigning schools to students...")
+    counter <<- 0
+    # Assign schools to students
+    population_schools[is.na(assigned_school), assigned_school := mapply(
+        locate_school,
+        sa1_zone_index,
+        Gender,
+        school_grade,
+        school_type
+    )]
 
-    # Iterative assignment using a while loop
-    iteration <- 1
-    population_schools[, assigned_school := NA_integer_]
-    while (any(is.na(population_schools$assigned_school))) {
-        log_info("Assigning schools to students...")
-        
-        # Assign schools to students
-        population_schools[is.na(assigned_school), assigned_school := mapply(
-            locate_school,
-            sa1_zone_index,
-            Gender,
-            school_grade,
-            school_type
-        )]
-
-        # Calculate the percentage of students assigned
-        assigned_percentage <- 100 * sum(!is.na(population_schools$assigned_school)) / nrow(population_schools)
-        log_info("Iteration {iteration}: {assigned_percentage}% of students have been assigned schools.")
-
-        # Break the loop if all students are assigned
-        if (assigned_percentage == 100) {
-            log_info("All students have been successfully assigned schools.")
-            break
-        }
-
-        iteration <- iteration + 1
-    }
+    assigned_percentage <- 100 * sum(!is.na(population_schools$assigned_school)) / nrow(population_schools)
+    log_info("{assigned_percentage}% of students have been assigned schools.")
     
     st_write(
         primary_secondary %>% select(-sa1_catchment), 

@@ -7,7 +7,8 @@ determineHouseholdCar <- function(population) {
   
   population <- population%>%
     left_join(read.csv("abs/melb_sa1_IRSAD_2016.csv")%>%
-                select(SA1_7DIGCODE,IRSAD))%>%
+                select(SA1_7DIGCODE,IRSAD),
+                by = join_by(SA1_7DIGCODE))%>%
     mutate(IRSAD = as.numeric(IRSAD))
   
   household <- population %>%
