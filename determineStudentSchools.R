@@ -159,12 +159,13 @@ prepare_school_microdata <- function(population_students) {
                 coordX = st_coordinates(geometry)[1],
                 coordY = st_coordinates(geometry)[2]
             )
+    higher_education_capacity_multiplier <- 1.21
     higher_education <- enrolments_higher_education %>%
             mutate(
                 id = jibeSchoolId,
                 zone = SA1_MAIN16,
                 type = "3",
-                capacity = coalesce(TOTAL,0),
+                capacity = coalesce(TOTAL * higher_education_capacity_multiplier,0),
                 occupancy = NA,
                 coordX = st_coordinates(geometry)[1],
                 coordY = st_coordinates(geometry)[2]
@@ -513,7 +514,7 @@ allocateSchools <- function(population_students) {
             capacity_multiplier <- 1.21 
             potential_schools <- higher_education[
                 get(enrolment_column) > 0 & 
-                get(allocated_enrolment_column) < get(enrolment_column)*capacity_multiplier
+                get(allocated_enrolment_column) <= get(enrolment_column)*capacity_multiplier
             ]
         } else if (school_type %in% c(1,2)) {
             school_data <- 'primary_secondary'
