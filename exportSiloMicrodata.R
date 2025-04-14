@@ -42,7 +42,8 @@ pp <- population[
         education = education,
         home_SA1 = SA1_MAINCODE_2016,
         work_SA1 = work_SA1,
-        school_SA1 = school_SA1
+        school_SA1 = school_SA1,
+        schoolId = assigned_school
     )
 ]
 log_info(paste0("Writing ../microData/pp_",base_year,".csv"))
@@ -80,7 +81,7 @@ hh <- population[
         autos = hhCar
     ), by = HouseholdId][
     , .SD[1], by = hhid][
-    , .(hhid, hh_size, zone, autos)]
+    , .(hhid, hhSize, zone, autos)]
 
 log_info(paste0("Writing ../microData/hh_",base_year,".csv"))
 write.csv(hh, paste0('../microData/hh_', base_year, '.csv'), row.names = FALSE)
