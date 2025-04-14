@@ -50,7 +50,11 @@ determineStudentSchools <- function(population) {
     #         age_max = max(Age,na.rm=TRUE)
     #     ) %>%
     # arrange(age_min)
+    log_info("Setting up primary and secondary schools")
+    enrolments_primary_secondary <<- prepare_primary_schools()
 
+    log_info("Setting up higher education schools")
+    enrolments_higher_education <<- prepare_higher_education_schools()
 
     log_info("Preparing combined school enrolments with export to geojson and csv microdata")
     combined_school_enrolments <- prepare_combined_school_enrolments()
