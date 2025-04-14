@@ -1,13 +1,11 @@
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(logger))
 # suppressPackageStartupMessages(library(tidyr))
 # suppressPackageStartupMessages(library(tibble))
 
-determineEmployed <- function(outputDir) {
+determineEmployed <- function(population) {
  
-  echo(paste0("Injesting population data\n"))
-  
-  population <- readRDS(paste0(outputDir,'/collatedPopulation.rds'))
-  
+  log_info("Commencing employment status assignment")
 
   population_employed <- population %>%
     dplyr::mutate(age_cat = case_when(Age <   5             ~  1,
@@ -36,14 +34,12 @@ determineEmployed <- function(outputDir) {
     group_by(SA2_MAINCODE,Gender,age_cat) %>%
     summarise(pop_count=n())
   
-  work_status <- read.csv("abs/melb_sa2_employment_2016.csv") %>%
+  work_status <- read.csv("abs/melb_sa2_employment_2016_2025update/melb_sa2_employment_2016_2025update_cleaned.csv") %>%
     mutate(tot=Employed+Not.Employed) %>%
     dplyr::select(SA2_MAINCODE=SA2,Age,Gender=Sex,Employed,Total=tot) %>%
     mutate(employment_percent=Employed/Total) %>%
     mutate(employment_percent=ifelse(is.nan(employment_percent), 0, employment_percent)) %>%
-    fill(SA2_MAINCODE, .direction="down") %>%
     mutate(Age=ifelse(Age=="",NA,Age)) %>%
-    fill(Age, .direction="down") %>%
     dplyr::mutate(age_cat = case_when(Age == "0-4 years"   ~  1,
                                       Age == "5-9 years"   ~  2,
                                       Age == "10-14 years" ~  3,
@@ -76,7 +72,7 @@ determineEmployed <- function(outputDir) {
   
   set.seed(12)
   
-  echo(paste0("Performing join on ", nrow(population_employed), " sampled persons, may take a while\n"))
+  log_info(paste0("Performing join on ", nrow(population_employed), " sampled persons"))
   
   population_employed_joined <- population_employed %>%
     inner_join(work_count, by=c("SA2_MAINCODE","Gender","age_cat")) %>%
@@ -88,7 +84,7 @@ determineEmployed <- function(outputDir) {
     arrange(SA2_MAINCODE,Gender,age_cat,random_sample) %>%
     dplyr::select(-pop_count,-employment_count,-random_sample)
   
-  echo(paste0("Wrote ", nrow(population_employed_joined), " sampled persons to ", outputDir, '\n'))
-  saveRDS(population_employed_joined,paste0(outputDir,'/populationEmployed.rds'))
+  log_info(paste0("Wrote ", nrow(population_employed_joined), " sampled persons to DataFrame"))
+  return(population_employed_joined)
   
 }

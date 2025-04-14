@@ -1,12 +1,14 @@
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(logger))
 
-determineEducationLevel <- function(outputDir) {
+determineHouseholdCar <- function(population) {
  
-  echo(paste0("Injesting population data\n"))
+  log_info("Commencing household size and car attribute assignment")
   
-  population <- readRDS(paste0(outputDir,'/populationEducation.rds'))%>%
+  population <- population%>%
     left_join(read.csv("abs/melb_sa1_IRSAD_2016.csv")%>%
-                select(SA1_7DIGCODE,IRSAD))%>%
+                select(SA1_7DIGCODE,IRSAD),
+                by = join_by(SA1_7DIGCODE))%>%
     mutate(IRSAD = as.numeric(IRSAD))
   
   household <- population %>%
@@ -56,7 +58,7 @@ determineEducationLevel <- function(outputDir) {
   
   set.seed(12)
   
-  echo(paste0("Performing join on ", nrow(household), " sampled persons, may take a while\n"))
+  log_info(paste0("Performing join on ", nrow(household), " sampled persons"))
   
   household_hhCar_joined <- household %>%
     inner_join(household_count_joined, by=c("SA2_MAINCODE","hhSize")) %>%
@@ -113,7 +115,7 @@ determineEducationLevel <- function(outputDir) {
     left_join(household_hhCar_joined%>%
                 select(HouseholdId,hhCar))
   
-  echo(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to ", outputDir, '\n'))
-  saveRDS(population_hhCar_joined,paste0(outputDir,'/populationHhCar.rds'))
+  log_info(paste0("Wrote ", nrow(population_hhCar_joined), " sampled persons to DataFrame"))
+  return(population_hhCar_joined)
   
 }
