@@ -31,9 +31,11 @@ population <- determineEducationLevel(population)
 source('determineHouseholdCar.R', local=TRUE); 
 population <- determineHouseholdCar(population)
 
+# 3. assign student status and allocate schools
 source('determineStudentSchools.R', local=TRUE);
 population <- determineStudentSchools(population)
 
+# For historical reasons this naming convention is retained, but this is not the final population data
 final_processed_population_data_file <-  paste0(outputDir,'/population_final.rds')
 saveRDS(population,final_processed_population_data_file)
 echo(
@@ -45,11 +47,12 @@ echo(
   )
 )
 
-# assigns a work SA1 location for those that work.
-# takes about 2 days to run for the entire population
-#might want to run this one interactively
+# Assign work SA1 locations
 source('assignWorkLocations.R', local=TRUE); 
 assignWorkLocations(
   outputDir,
   population
 );
+
+# Prepare and output final population microdata for SILO
+source('exportSiloMicrodata.R', local=TRUE);

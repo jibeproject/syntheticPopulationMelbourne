@@ -26,7 +26,7 @@ Results are output to the following folders:
 
 ## Workflow 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph makeJibeMelbournePopulation.R
         direction TB
         subgraph Preparation
@@ -34,7 +34,7 @@ flowchart LR
         end
         subgraph Employment ["Employment status"]
             direction LR
-            determineEmployed.R -->workData@{ shape: docs, label: "../outputs/synthetic_population/workers_sa1_balance1.rds"}
+            determineEmployed.R
         end
         subgraph Education ["Education level"]
             determineEducationLevel.R
@@ -44,11 +44,12 @@ flowchart LR
         end
         subgraph Students ["Student status"]
             direction LR
-            determineStudentSchools.R --> microdata@{ shape: docs, label: "../microData/ss_2021.csv"}
+            determineStudentSchools.R
         end
     end
     Preparation --> Employment --> Education --> Car --> Students
     input@{ shape: docs, label: "data/*\nabs/*\n"}--> makeJibeMelbournePopulation.R
     Util.R--imported by-->makeJibeMelbournePopulation.R
     makeJibeMelbournePopulation.R --> population@{ shape: docs, label: "../outputs/synthetic_population/population_final.rds"}
+    population@{ shape: docs, label: "../outputs/synthetic_population/population_final.rds"} --> microdata@{ shape: docs, label: "../microData/pp_2018.csv\n../microData/hh_2018.csv\n../microData/ss_2018.csv"}
 ```
