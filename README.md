@@ -2,7 +2,9 @@
 Code for generating the synthetic population for the JIBE Melbourne model.
 
 ## Status
-In progress (as of 2025-04-08 process has been run through to completion, but pending refinement due to remaining issues, including output in format for [MiTO](https://github.com/jibeproject/mito) and [SILO](https://github.com/jibeproject/silo) purposes)
+As of 2025-04-14 the refactored synthetic population workflow has been validated to generate work and student statuses etc, and all associated worker allocation files as generated previously (with addition of student status/school allocation).
+
+Further updates are pending to address output in format for [MiTO](https://github.com/jibeproject/mito) and [SILO](https://github.com/jibeproject/silo) purposes)
 
 ## Requirements
 - R 4.0.0 or higher
@@ -17,24 +19,36 @@ In progress (as of 2025-04-08 process has been run through to completion, but pe
 Rscript ./makeJibeMelbournePopulation.R
 ```
 
+## Output
+Results are output to the following folders:
+- `../output/synthetic_population`
+- `../microData`
+
 ## Workflow 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph makeJibeMelbournePopulation.R
-        direction TB 
-        collatePopulation.R -->
-        determineEmployed.R -->
-        determineEducationLevel.R -->
-        determineHouseholdCar.R -->
-        determineStudentSchools.R
-        determineEmployed.R -->
-        assignWorkLocations.R
+        direction TB
+        subgraph Preparation
+            collatePopulation.R
+        end
+        subgraph Employment ["Employment status"]
+            direction LR
+            determineEmployed.R -->workData@{ shape: docs, label: "../outputs/synthetic_population/workers_sa1_balance1.rds"}
+        end
+        subgraph Education ["Education level"]
+            determineEducationLevel.R
+        end
+        subgraph Car ["Car ownership"]
+            determineHouseholdCar.R
+        end
+        subgraph Students ["Student status"]
+            direction LR
+            determineStudentSchools.R --> microdata@{ shape: docs, label: "../microData/ss_2021.csv"}
+        end
     end
+    Preparation --> Employment --> Education --> Car --> Students
     input@{ shape: docs, label: "data/*\nabs/*\n"}--> makeJibeMelbournePopulation.R
     Util.R--imported by-->makeJibeMelbournePopulation.R
-    makeJibeMelbournePopulation.R -->
-    population@{ shape: docs, label: "population_final.rds"}
-    makeJibeMelbournePopulation.R -->
-    workData@{ shape: docs, label: "workers_sa1_balance1.rds"} -->
-    analyseWorkLocations.R
+    makeJibeMelbournePopulation.R --> population@{ shape: docs, label: "../outputs/synthetic_population/population_final.rds"}
 ```
