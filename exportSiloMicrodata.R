@@ -75,7 +75,7 @@ log_info("Preparing hh_2018 household microdata")
 hh <- population[
     , .(
         hhid = HouseholdId,
-        hh_size = hhSize,
+        hhSize = hhSize,
         zone = SA1_MAINCODE_2016,
         autos = hhCar
     ), by = HouseholdId][
