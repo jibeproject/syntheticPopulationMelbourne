@@ -9,7 +9,7 @@ determineHouseholdAttributes <- function(population) {
   # note that NA values had been hard coded as -1 and 11 (codes not present in the source ABS data)
   # -1 are NAs with counts < 5, while 11 are NAs with counts > 5; but they are both NAs
   # For consistency with the National Household Survey data dictionary, these are both set to NA
-  population <- population%>%
+  population <- population %>%
     left_join(read.csv("abs/melb_sa1_IRSD_2016.csv")%>%
                 select(SA1_7DIGCODE,IRSD),
                 by = join_by(SA1_7DIGCODE))%>%

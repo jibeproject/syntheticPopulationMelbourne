@@ -34,7 +34,7 @@ population <- determineEmployed(population)
 source('determineEducationLevel.R', local=TRUE); 
 population <- determineEducationLevel(population)
 
-# 2. add household number of cars 
+# 2. add household attributes
 source('determineHouseholdAttributes.R', local=TRUE); 
 population <- determineHouseholdAttributes(population)
 
