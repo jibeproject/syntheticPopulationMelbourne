@@ -6,6 +6,10 @@ determineHouseholdCar <- function(population) {
   log_info("Commencing household size and car attribute assignment")
   
   population <- population%>%
+    left_join(read.csv("abs/melb_sa1_IRSD_2016.csv")%>%
+                select(SA1_7DIGCODE,IRSD),
+                by = join_by(SA1_7DIGCODE))%>%
+    mutate(IRSD = as.numeric(IRSD))%>%
     left_join(read.csv("abs/melb_sa1_IRSAD_2016.csv")%>%
                 select(SA1_7DIGCODE,IRSAD),
                 by = join_by(SA1_7DIGCODE))%>%
@@ -20,8 +24,6 @@ determineHouseholdCar <- function(population) {
     group_by(SA2_MAINCODE,hhSize)%>%
     summarise(hh_count=n())
   
-
-    
     householdCar_status <- read.csv("abs/melb_sa2_hhSize_hhCar_2016.csv")%>%
       select(SA2_MAINCODE=SA2,hhSize,car_0,car_1,car_2,car_3,car_4)%>%
       mutate(tot=car_0+car_1+car_2+car_3+car_4) %>%
