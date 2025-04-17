@@ -7,6 +7,13 @@ options(dplyr.summarise.inform = FALSE)
 # Increase the maximum allowed size for globals
 options(future.globals.maxSize = 1024 * 1024 * 1024) # 1 GB
 
+if (basename(normalizePath("../../")) != "melbourne" || 
+  !file.exists("../../properties.properties") ||
+  !dir.exists("../input/buildingShapefile") ||
+  !file.exists("../input/buildingShapefile/buildings.geojson")) {
+    stop("The synthetic population code is intended to be run from the JIBE Melbourne directory, containing the file 'properties.properties'.")
+}
+
 # load general purpose utility functions
 source("util.R")
 
@@ -28,8 +35,8 @@ source('determineEducationLevel.R', local=TRUE);
 population <- determineEducationLevel(population)
 
 # 2. add household number of cars 
-source('.\determineHouseholdAttributes.R', local=TRUE); 
-population <- .\determineHouseholdAttributes(population)
+source('determineHouseholdAttributes.R', local=TRUE); 
+population <- determineHouseholdAttributes(population)
 
 # 3. assign student status and allocate schools
 source('determineStudentSchools.R', local=TRUE);

@@ -30,7 +30,7 @@ collate2016Population <- function(plansFile=NA) {
         unzip(population_zip, exdir = "./data")
         log_info("Extraction complete.")
       } else {
-        stop("Error: Population folder and zip file are both missing. Please provide './data/melbourne-2016-population.zip'.")
+        stop("Error: Population folder and zip file are both missing. Please provide './data/melbourne-2016-population.zip'.  The ./data and ./abs folders should both be copied from the JIBE working group Melbourne directory to the synthetic population folder.")
       }
     } else {
       log_info(paste0("Source population folder exists: ", population_folder))
