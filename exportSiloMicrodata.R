@@ -56,7 +56,7 @@ jj_2018 <- workers[
         , .SD[sample(.N, 1)], by = PlanId 
     ][
         , .(
-            id = i.id, 
+            id = id, 
             zone = sa1_work,
             personId = PlanId,
             microLocationType = "poi",
@@ -74,7 +74,9 @@ pp <- population[
     , occupation := fifelse(student_status == 1, "student", 
                                  fifelse(is_employed == 1, "employed", "other"))
 ][
-    workers, on = .(AgentId = PlanId), work_SA1 := sa1_work
+    jj_2018, on = .(AgentId = personId), 
+    work_SA1 := zone, 
+    workplace := fifelse(!is.na(microBuildingID), microBuildingID, -1)
 ][
     schools, on = .(assigned_school = id), school_SA1 := zone
 ][
