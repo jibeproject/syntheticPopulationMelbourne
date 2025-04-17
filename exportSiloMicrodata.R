@@ -24,20 +24,50 @@ setkey(workers, SA1_MAINCODE_2016)
 setkey(schools, id)
 
 log_info("loading spatial data")
-zoneSystem <- st_read("../input/zonesShapefile/SA1_2016_AUST_MEL.shp") %>% st_transform(crs = crs)
-buildings <- st_read("../input/buildingShapefile/buildings.geojson") %>% st_transform(crs = crs)
-buildings <- buildings %>% st_centroid() %>% 
-    st_join(buildings, zoneSystem[, c("SA1_MAIN16")], join = st_within) %>%
+zoneSystem <- st_read("../input/zonesShapefile/SA1_2016_AUST_MEL.shp") %>% 
+    st_transform(crs = crs) %>% 
+    rename(zone = SA1_MAIN16)
+buildings <- st_read("../input/buildingShapefile/buildings.geojson") %>% 
+    st_transform(crs = crs)  %>% 
+    st_centroid()
+buildings <- st_join(buildings, zoneSystem[buildings, c("zone")], join = st_within) %>%
     mutate(
-        zone = SA1_MAIN16,
         coordX = st_coordinates(.)[, 1],
         coordY = st_coordinates(.)[, 2]
-    ) %>%
+    ) %>% 
+    filter(!is.na(zone)) %>%
     st_drop_geometry()
 
+
 setDT(buildings)
+setkey(buildings, zone, use)
+buildings[, zone := as.double(zone)]
 
 rm(zoneSystem)
+
+log("Preparing jj_2018 jobs microdata")
+
+non_residential_buildings <- buildings[use != "Residential"]
+
+# Allocate random non-residential building to each worker based on zone
+jj_2018 <- workers[
+        non_residential_buildings, on = .(sa1_work = zone), allow.cartesian = TRUE
+    ][
+        , .SD[sample(.N, 1)], by = PlanId 
+    ][
+        , .(
+            id = i.id, 
+            zone = sa1_work,
+            personId = PlanId,
+            microLocationType = "poi",
+            microBuildingID = id,
+            coordX = coordX,
+            coordY = coordY
+        )
+    ]
+
+# Write the output to a CSV file
+write.csv(jj_2018, paste0('../microData/jj_', base_year, '.csv'), row.names = FALSE)
 
 log_info("Preparing pp_2018 population microdata")
 pp <- population[
@@ -116,12 +146,29 @@ log_info("Preparing dd_2018 dwelling microdata, noting:
     - floor is set to 0
     - coordinates are set to a randomly selected building within the SA1 of the household
 ")
+
+residential_buildings <- buildings[use == "Residential"]
+
 dd <- hh[
-    , .(hhid, zone)][
-    buildings, on = .(zone), zone := i.SA1_MAIN16][
-    , .(hhid, zone, coordX, coordY)][
-    buildings[use == "Residential"], on = .(zone), zone := i.SA1_MAIN16][
-    , .SD[sample(.N, 1)], by = hhid][
-    , .(id = hhid, zone, type = "flat", hhid, bedrooms = 3, quality = 3, monthlyCost = 1640, yearBuilt = 0, floor = 0, coordX, coordY)]
+    residential_buildings, on = .(zone), allow.cartesian = TRUE
+][
+    , .SD[sample(.N, min(.N, .GRP))], by = .(zone, hhid)
+][
+    , .(
+        id = hhid,
+        zone = zone,
+        type = "flat",
+        hhid = hhid,
+        bedrooms = 3,
+        quality = 3,
+        monthlyCost = 1640,
+        yearBuilt = 0,
+        floor = 0,
+        coordX = coordX,
+        coordY = coordY
+    )
+]
 
 write.csv(dd, paste0('../microData/dd_', base_year, '.csv'), row.names = FALSE)
+
+
