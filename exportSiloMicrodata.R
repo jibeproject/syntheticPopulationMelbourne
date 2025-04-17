@@ -2,6 +2,7 @@
 
 library(logger)
 library(data.table)
+library(sf)
 
 # Load project properties (includes coordinate reference system)
 properties_file <- "../project.properties"
@@ -16,10 +17,27 @@ schools <- read.csv('../microData/ss_2018.csv')
 setDT(population)
 setDT(workers)
 setDT(schools)
+
 # Set keys for faster joins
 setkey(population, SA1_MAINCODE_2016)
 setkey(workers, SA1_MAINCODE_2016)
 setkey(schools, id)
+
+log_info("loading spatial data")
+zoneSystem <- st_read("../input/zonesShapefile/SA1_2016_AUST_MEL.shp") %>% st_transform(crs = crs)
+buildings <- st_read("../input/buildingShapefile/buildings.geojson") %>% st_transform(crs = crs)
+buildings <- buildings %>% st_centroid() %>% 
+    st_join(buildings, zoneSystem[, c("SA1_MAIN16")], join = st_within) %>%
+    mutate(
+        zone = SA1_MAIN16,
+        coordX = st_coordinates(.)[, 1],
+        coordY = st_coordinates(.)[, 2]
+    ) %>%
+    st_drop_geometry()
+
+setDT(buildings)
+
+rm(zoneSystem)
 
 log_info("Preparing pp_2018 population microdata")
 pp <- population[
@@ -85,3 +103,25 @@ hh <- population[
 
 log_info(paste0("Writing ../microData/hh_",base_year,".csv"))
 write.csv(hh, paste0('../microData/hh_', base_year, '.csv'), row.names = FALSE)
+
+log_info("Preparing dd_2018 dwelling microdata, noting:
+    - id is set to household ID 
+    - zone is set to SA1_MAIN16
+    - type is set to 'flat' 
+    - hhid is set to household ID
+    - bedrooms is set to 3 
+    - quality is set to 3 
+    - monthlyCost is set to 1640 (median monthly rent in June 2018 for Metropolitan Melbourne, according to https://www.dffh.vic.gov.au/tables-rental-report-june-2018)
+    - yearBuilt is set to 0
+    - floor is set to 0
+    - coordinates are set to a randomly selected building within the SA1 of the household
+")
+dd <- hh[
+    , .(hhid, zone)][
+    buildings, on = .(zone), zone := i.SA1_MAIN16][
+    , .(hhid, zone, coordX, coordY)][
+    buildings[use == "Residential"], on = .(zone), zone := i.SA1_MAIN16][
+    , .SD[sample(.N, 1)], by = hhid][
+    , .(id = hhid, zone, type = "flat", hhid, bedrooms = 3, quality = 3, monthlyCost = 1640, yearBuilt = 0, floor = 0, coordX, coordY)]
+
+write.csv(dd, paste0('../microData/dd_', base_year, '.csv'), row.names = FALSE)
