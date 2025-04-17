@@ -28,8 +28,8 @@ source('determineEducationLevel.R', local=TRUE);
 population <- determineEducationLevel(population)
 
 # 2. add household number of cars 
-source('determineHouseholdCar.R', local=TRUE); 
-population <- determineHouseholdCar(population)
+source('.\determineHouseholdAttributes.R', local=TRUE); 
+population <- .\determineHouseholdAttributes(population)
 
 # 3. assign student status and allocate schools
 source('determineStudentSchools.R', local=TRUE);
