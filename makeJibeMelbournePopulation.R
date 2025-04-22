@@ -7,13 +7,21 @@ options(dplyr.summarise.inform = FALSE)
 # Increase the maximum allowed size for globals
 options(future.globals.maxSize = 1024 * 1024 * 1024) # 1 GB
 
-if (basename(normalizePath("../../")) != "melbourne" || 
-  !file.exists("../properties.properties") ||
-  !dir.exists("../input/buildingShapefile") ||
-  !file.exists("../input/buildingShapefile/buildings.geojson")) {
-    stop("The synthetic population code is intended to be run from a subdirectory within the JIBE Melbourne data folder, containing the file 'properties.properties'.")
+if (basename(normalizePath("../")) != "melbourne") {
+    stop("The base directory is not named 'melbourne'. Current base directory: ", basename(normalizePath("../"), "\nThe synthetic population code is intended to be run from the JIBE Melbourne directory, containing the file 'project.properties'."))
 }
 
+if (!file.exists("../project.properties")) {
+    stop("The file 'project.properties' does not exist in the expected location: '../project.properties'.")
+}
+
+if (!dir.exists("../input/buildingShapefile")) {
+    stop("The directory '../input/buildingShapefile' does not exist.")
+}
+
+if (!file.exists("../input/buildingShapefile/buildings.geojson")) {
+    stop("The file 'buildings.geojson' does not exist in the directory '../input/buildingShapefile'.")
+}
 # load general purpose utility functions
 source("util.R")
 
