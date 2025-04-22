@@ -8,10 +8,10 @@ options(dplyr.summarise.inform = FALSE)
 options(future.globals.maxSize = 1024 * 1024 * 1024) # 1 GB
 
 if (basename(normalizePath("../../")) != "melbourne" || 
-  !file.exists("../../properties.properties") ||
+  !file.exists("../properties.properties") ||
   !dir.exists("../input/buildingShapefile") ||
   !file.exists("../input/buildingShapefile/buildings.geojson")) {
-    stop("The synthetic population code is intended to be run from the JIBE Melbourne directory, containing the file 'properties.properties'.")
+    stop("The synthetic population code is intended to be run from a subdirectory within the JIBE Melbourne data folder, containing the file 'properties.properties'.")
 }
 
 # load general purpose utility functions

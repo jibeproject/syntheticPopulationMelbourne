@@ -208,14 +208,14 @@ dd <- hh[
 ]
 
 
-dwelling_zone_summary <- dd[
-   , .(
-       unique_building_count = uniqueN(microBuildingID),
-       unique_household_count = uniqueN(hhid)
-       ), by = zone
-]
+# dwelling_zone_summary <- dd[
+#    , .(
+#        unique_building_count = uniqueN(microBuildingID),
+#        unique_household_count = uniqueN(hhid)
+#        ), by = zone
+# ]
 
-dwelling_zone_summary %>% summary()
+# dwelling_zone_summary %>% summary()
 ##       zone           unique_building_count unique_household_count
 ##  Min.   :2.060e+10   Min.   :   1.0        Min.   :   1.0
 ##  1st Qu.:2.080e+10   1st Qu.:  75.0        1st Qu.: 126.0
