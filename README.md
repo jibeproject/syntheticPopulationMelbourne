@@ -27,7 +27,9 @@ Results are output to the following folders:
 ## Workflow 
 ```mermaid
 flowchart TB
-    subgraph makeJibeMelbournePopulation.R
+subgraph makeJibeMelbournePopulation.R
+    direction LR
+    subgraph Preprocessing
         direction TB
         subgraph Preparation
             collatePopulation.R
@@ -47,9 +49,17 @@ flowchart TB
             determineStudentSchools.R
         end
     end
-    Preparation --> Employment --> Education --> Car --> Students
-    input@{ shape: docs, label: "data/*\nabs/*\n"}--> makeJibeMelbournePopulation.R
-    Util.R--imported by-->makeJibeMelbournePopulation.R
-    makeJibeMelbournePopulation.R --> population@{ shape: docs, label: "../outputs/synthetic_population/population_final.rds"}
-    population@{ shape: docs, label: "../outputs/synthetic_population/population_final.rds"} --> microdata@{ shape: docs, label: "../microData/pp_2018.csv\n../microData/hh_2018.csv\n../microData/ss_2018.csv"}
+    subgraph Postprocessing
+        direction TB
+        population@{ shape: docs, label: "../output/synthetic_population/population_final.rds"} -->
+        assignWorkLocations.R -->
+        workers@{ shape: docs, label: "../output/synthetic_population/workers_sa1_balance1.rds"} -->
+        exportSiloMicrodata.R -->
+        microdata@{ shape: docs, label: "../microData/pp_2018.csv\n../microData/dd_2018.csv\n../microData/hh_2018.csv\n../microData/jj_2018.csv\n../microData/ss_2018.csv"}
+    end
+end
+Preprocessing --> Postprocessing
+Preparation --> Employment --> Education --> Car --> Students
+input@{ shape: docs, label: "data/*\nabs/*\n"}--> makeJibeMelbournePopulation.R
+Util.R--imported by-->makeJibeMelbournePopulation.R
 ```

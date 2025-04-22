@@ -1,15 +1,25 @@
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(logger))
 
-determineHouseholdCar <- function(population) {
+determineHouseholdAttributes <- function(population) {
  
-  log_info("Commencing household size and car attribute assignment")
+  log_info("Commencing neighbourhood disadvantage, household size and car attribute assignment")
   
-  population <- population%>%
+  log_info("Joining SA1 IRSD and IRSAD data")
+  # note that NA values had been hard coded as -1 and 11 (codes not present in the source ABS data)
+  # -1 are NAs with counts < 5, while 11 are NAs with counts > 5; but they are both NAs
+  # For consistency with the National Household Survey data dictionary, these are both set to NA
+  population <- population %>%
+    left_join(read.csv("abs/melb_sa1_IRSD_2016.csv")%>%
+                select(SA1_7DIGCODE,IRSD),
+                by = join_by(SA1_7DIGCODE))%>%
+    mutate(IRSD = as.numeric(IRSD),
+           IRSD = ifelse(IRSD %in% c(-1, 11), NA, IRSD))%>%
     left_join(read.csv("abs/melb_sa1_IRSAD_2016.csv")%>%
                 select(SA1_7DIGCODE,IRSAD),
                 by = join_by(SA1_7DIGCODE))%>%
-    mutate(IRSAD = as.numeric(IRSAD))
+    mutate(IRSAD = as.numeric(IRSAD),
+           IRSAD = ifelse(IRSAD %in% c(-1, 11), NA, IRSAD))
   
   household <- population %>%
     group_by(HouseholdId) %>%
@@ -20,8 +30,6 @@ determineHouseholdCar <- function(population) {
     group_by(SA2_MAINCODE,hhSize)%>%
     summarise(hh_count=n())
   
-
-    
     householdCar_status <- read.csv("abs/melb_sa2_hhSize_hhCar_2016.csv")%>%
       select(SA2_MAINCODE=SA2,hhSize,car_0,car_1,car_2,car_3,car_4)%>%
       mutate(tot=car_0+car_1+car_2+car_3+car_4) %>%

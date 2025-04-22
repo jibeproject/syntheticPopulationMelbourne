@@ -7,6 +7,21 @@ options(dplyr.summarise.inform = FALSE)
 # Increase the maximum allowed size for globals
 options(future.globals.maxSize = 1024 * 1024 * 1024) # 1 GB
 
+if (basename(normalizePath("../")) != "melbourne") {
+    stop("The base directory is not named 'melbourne'. Current base directory: ", basename(normalizePath("../"), "\nThe synthetic population code is intended to be run from the JIBE Melbourne directory, containing the file 'project.properties'."))
+}
+
+if (!file.exists("../project.properties")) {
+    stop("The file 'project.properties' does not exist in the expected location: '../project.properties'.")
+}
+
+if (!dir.exists("../input/buildingShapefile")) {
+    stop("The directory '../input/buildingShapefile' does not exist.")
+}
+
+if (!file.exists("../input/buildingShapefile/buildings.geojson")) {
+    stop("The file 'buildings.geojson' does not exist in the directory '../input/buildingShapefile'.")
+}
 # load general purpose utility functions
 source("util.R")
 
@@ -27,9 +42,9 @@ population <- determineEmployed(population)
 source('determineEducationLevel.R', local=TRUE); 
 population <- determineEducationLevel(population)
 
-# 2. add household number of cars 
-source('determineHouseholdCar.R', local=TRUE); 
-population <- determineHouseholdCar(population)
+# 2. add household attributes
+source('determineHouseholdAttributes.R', local=TRUE); 
+population <- determineHouseholdAttributes(population)
 
 # 3. assign student status and allocate schools
 source('determineStudentSchools.R', local=TRUE);
