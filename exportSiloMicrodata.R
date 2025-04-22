@@ -56,10 +56,10 @@ jj_2018 <- workers[
         , .SD[sample(.N, 1)], by = PlanId 
     ][
         , .(
-            id = id, 
+            id = .I, 
             zone = sa1_work,
             personId = PlanId,
-            microLocationType = "poi",
+            microLocationType = "tot",
             microBuildingID = id,
             coordX = coordX,
             coordY = coordY
@@ -76,7 +76,7 @@ pp <- population[
 ][
     jj_2018, on = .(AgentId = personId), 
     work_SA1 := zone, 
-    workplace := fifelse(!is.na(microBuildingID), microBuildingID, -1)
+    workplace := fifelse(!is.na(id), id, -1)
 ][
     schools, on = .(assigned_school = id), school_SA1 := zone
 ][
@@ -85,15 +85,17 @@ pp <- population[
         hhid = HouseholdId,
         age = Age,
         gender = Gender,
-        # ethnic = NA_character_,
+        ethnic = NA_character_,
         relationship = tolower(RelationshipStatus),
         occupation = occupation,
-        # driversLicence = NA_integer_,
-        education = education,
+        driversLicence = NA_integer_,
+        # education = education,
+        workplace = workplace,
+        income = NA_integer_,
+        schoolId = assigned_school,
         home_SA1 = SA1_MAINCODE_2016,
         work_SA1 = work_SA1,
         school_SA1 = school_SA1,
-        schoolId = assigned_school
     )
 ]
 log_info(paste0("Writing ../microData/pp_",base_year,".csv"))
@@ -152,10 +154,10 @@ log_info("Preparing dd_2018 dwelling microdata, noting:
 residential_buildings <- buildings[use == "Residential"]
 
 dd <- hh[
-    residential_buildings, on = .(zone), allow.cartesian = TRUE
-][
-    , .SD[sample(.N, min(.N, .GRP))], by = .(zone, hhid)
-][
+        residential_buildings, on = .(zone), allow.cartesian = TRUE
+    ][
+        , .SD[sample(.N, 1)], by = .(zone, hhid)
+    ][
     , .(
         id = hhid,
         zone = zone,
