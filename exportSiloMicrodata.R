@@ -45,7 +45,7 @@ buildings[, zone := as.double(zone)]
 
 rm(zoneSystem)
 
-log("Preparing jj_2018 jobs microdata")
+log_info("Preparing jj_2018 jobs microdata")
 
 non_residential_buildings <- buildings[use != "Residential"]
 
