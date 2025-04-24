@@ -1,5 +1,6 @@
 # See https://github.com/jibeproject/syntheticPopulationMelbourne/issues/4
 
+library(dplyr)
 library(logger)
 library(data.table)
 library(sf)
