@@ -1,11 +1,6 @@
 # syntheticPopulationMelbourne
 Code for generating the synthetic population for the JIBE Melbourne model.
 
-## Status
-As of 2025-04-14 the refactored synthetic population workflow has been validated to generate work and student statuses etc, and all associated worker allocation files as generated previously (with addition of student status/school allocation).
-
-Further updates are pending to address output in format for [MiTO](https://github.com/jibeproject/mito) and [SILO](https://github.com/jibeproject/silo) purposes)
-
 ## Requirements
 - R 4.0.0 or higher
 - R packages: `install.packages(c('tidyverse','data.table','sf','furrr','logger','stringr','igraph','future')`
