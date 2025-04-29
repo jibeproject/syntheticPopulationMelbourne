@@ -1,5 +1,6 @@
 # See https://github.com/jibeproject/syntheticPopulationMelbourne/issues/4
 
+library(dplyr)
 library(logger)
 library(data.table)
 library(sf)
@@ -45,7 +46,7 @@ buildings[, zone := as.double(zone)]
 
 rm(zoneSystem)
 
-log("Preparing jj_2018 jobs microdata")
+log_info("Preparing jj_2018 jobs microdata")
 
 non_residential_buildings <- buildings[use != "Residential"]
 
