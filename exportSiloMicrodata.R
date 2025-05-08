@@ -96,7 +96,7 @@ log_info("Preparing pp_2018 population microdata")
 # Step 1: Add occupation column to population
 population <- population[
     , occupation := fifelse(student_status == 1, "student", 
-                                 fifelse(is_employed == 1, "employed", "other"))
+                                 fifelse(is_employed == TRUE, "employed", "other"))
 ]
 
 # Step 2: Join with jj_2018 and derive work-related columns
