@@ -100,18 +100,22 @@ population <- population[
 ]
 
 # Step 2: Join with jj_2018 and derive work-related columns
-pp <- population[
-    jj_2018[, .(personId, work_zone = zone, work_building_id = id)], 
-    on = .(AgentId = personId), 
-    nomatch = NA
-]
+pp <- merge(
+    population,
+    jj_2018[, .(personId, work_zone = zone, work_building_id = id)],
+    by.x = "AgentId",
+    by.y = "personId",
+    all.x = TRUE
+)
 
 # Step 3: Join with schools and derive school-related columns
-pp <- pp[
-    schools[, .(school_id = id, school_zone = zone)], 
-    on = .(assigned_school = school_id), 
-    nomatch = NA
-]
+pp <- merge(
+    pp,
+    schools[, .(school_id = id, school_zone = zone)],
+    by.x = "assigned_school",
+    by.y = "school_id",
+    all.x = TRUE
+)
 
 # Step 4: Select and compute the final columns
 pp <- pp[
