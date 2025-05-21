@@ -94,9 +94,19 @@ log_info("Preparing pp_2018 population microdata")
 
 
 # Step 1: Add occupation column to population
+## Follows numeric typology defined at:
+## https://github.com/jibeproject/mito/blob/01ef0b7790273d185d8b0c49da392a37043afc82/mitoCore/src/main/java/de/tum/bgu/msm/data/MitoOccupationStatus.java#L9-L17
+## and discussed in https://github.com/jibeproject/mito/issues/18
+## 1 = employed (not a student)
+## 2 = unemployed (not employed nor a student, and aged < 67)
+## 3 = student
+## 4 = other (not employed nor a student, and aged >= 67)
 population <- population[
-    , occupation := fifelse(student_status == 1, "student", 
-                                 fifelse(is_employed == TRUE, "employed", "other"))
+    , occupation := fifelse(student_status == 1, 3, 
+        fifelse(is_employed == TRUE & student_status != 1, 1,
+            fifelse(is_employed != TRUE & student_status != 1 & Age < 67, 2, 4)
+        )
+    )
 ]
 
 # Step 2: Join with jj_2018 and derive work-related columns
