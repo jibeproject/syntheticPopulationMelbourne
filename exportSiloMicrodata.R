@@ -68,6 +68,8 @@ jj_2018 <- workers[
         )
     ]
 
+# If there are zone values in non_residential_buildings that do not match any sa1_work in workers, the resulting joined rows will have NA for all columns from workers, resulting in NA for personId.  Such rows should be omitted.
+jj_2018 <- jj_2018[!is.na(personId)]
 
 # building_summary <- jj_2018[
 #     , .(
