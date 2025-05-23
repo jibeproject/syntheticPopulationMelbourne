@@ -181,13 +181,13 @@ log_info("Preparing hh_2018 household microdata")
 
 hh <- population[
     , .(
-        hhid = HouseholdId,
+        id = HouseholdId, 
         hhSize = hhSize,
         zone = SA1_MAINCODE_2016,
         autos = hhCar
     ), by = HouseholdId][
-    , .SD[1], by = hhid][
-    , .(hhid, hhSize, zone, autos)]
+    , .SD[1], by = id][
+    , .(id, hhSize, zone, autos)]
 
 log_info(paste0("Writing ../microData/hh_",base_year,".csv"))
 write.csv(hh, paste0('../microData/hh_', base_year, '.csv'), row.names = FALSE)
@@ -210,13 +210,13 @@ residential_buildings <- buildings[use == "Residential"]
 dd <- hh[
         residential_buildings[, .(zone, building_id = id, coordX, coordY)], on = .(zone), allow.cartesian = TRUE
     ][
-        , .SD[sample(.N, 1)], by = .(zone, hhid)
+        , .SD[sample(.N, 1)], by = .(zone, id)
     ][
     , .(
-        id = hhid,
+        id = id,
         zone = zone,
         type = "flat",
-        hhid = hhid,
+        hhid = id,
         bedrooms = 3,
         quality = 3,
         monthlyCost = 1640,
