@@ -60,7 +60,8 @@ jj_2018 <- workers[
             id = .I, 
             zone = sa1_work,
             personId = PlanId,
-            microLocationType = "tot",
+            type = "tot",
+            microLocationType = "poi",
             microBuildingID = id,
             coordX = coordX,
             coordY = coordY
