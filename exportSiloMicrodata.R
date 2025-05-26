@@ -141,7 +141,7 @@ pp <- pp[
         driversLicence = NA_integer_,
         # education = education,
         workplace = fifelse(!is.na(work_building_id), work_building_id, -1),
-        income = NA_integer_,
+        income = 1901*52, # set to 2021 median household income calculated for 2018 https://abs.gov.au/census/find-census-data/quickstats/2021/2GMEL
         schoolId = assigned_school,
         home_SA1 = SA1_MAINCODE_2016,
         school_SA1 = school_zone,
