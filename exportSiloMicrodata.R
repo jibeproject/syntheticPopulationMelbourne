@@ -44,8 +44,6 @@ setDT(buildings)
 setkey(buildings, zone, use)
 buildings[, zone := as.double(zone)]
 
-rm(zoneSystem)
-
 log_info("Preparing jj_2018 jobs microdata")
 
 non_residential_buildings <- buildings[use != "Residential"]
@@ -207,10 +205,32 @@ log_info("Preparing dd_2018 dwelling microdata, noting:
 
 residential_buildings <- buildings[use == "Residential"]
 
+# For each zone, if there are no residential buildings, use non-residential buildings as fallback
+zones_with_res <- unique(residential_buildings$zone)
+zones_without_res <- setdiff(unique(hh$zone), zones_with_res)
+
+missing_zones <- setdiff(unique(hh$zone), unique(residential_buildings$zone))
+n_missing_households <- hh[zone %in% missing_zones, .N]
+print(paste("Number of households with no matching zone in residential_buildings:", n_missing_households))
+# 2849
+
+# Combine: residential buildings for zones that have them, otherwise non-residential
+combined_buildings <- rbind(
+    residential_buildings,
+    non_residential_buildings[zone %in% zones_without_res]
+)
+
+missing_zones <- setdiff(unique(hh$zone), unique(combined_buildings$zone))
+n_missing_households <- hh[zone %in% missing_zones, .N]
+print(paste("Number of households with no matching zone in combined_buildings:", n_missing_households))
+# 612
+
 dd <- hh[
-        residential_buildings[, .(zone, building_id = id, coordX, coordY)], on = .(zone), allow.cartesian = TRUE
+        combined_buildings[, .(zone, building_id = id, coordX, coordY)], on = .(zone), allow.cartesian = TRUE
     ][
-        , .SD[sample(.N, 1)], by = .(zone, id)
+        , .SD[sample(.N, 1)], by = id  
+    ][
+    !is.na(id) 
     ][
     , .(
         id = id,
@@ -228,6 +248,43 @@ dd <- hh[
     )
 ]
 
+# > dd %>% nrow()
+# [1] 1837077
+# > nrow(hh) - nrow(dd)           
+# [1] 612
+
+missing_hh <- hh[!id %in% dd$id]
+zoneSystem$zone <- as.double(zoneSystem$zone)
+if (nrow(missing_hh) > 0) {
+    # Get polygons for missing zones
+    missing_zones_sf <- zoneSystem[zoneSystem$zone %in% missing_hh$zone, ]
+    # Generate one random point per zone
+    sampled_points <- st_sample(missing_zones_sf, size = nrow(missing_zones_sf), type = "random")
+    # Map sampled points to zones
+    coords <- st_coordinates(sampled_points)
+    zone_coords <- data.table(zone = missing_zones_sf$zone, coordX = coords[,1], coordY = coords[,2])
+    # Merge coordinates to missing_hh
+    missing_hh <- merge(missing_hh, zone_coords, by = "zone", all.x = TRUE)
+    # Add required columns
+    missing_hh[, `:=`(
+        type = "flat",
+        hhid = id,
+        bedrooms = 3,
+        quality = 3,
+        monthlyCost = 1640,
+        yearBuilt = 0,
+        floor = 0,
+        microBuildingID = NA
+    )]
+    # Bind to dd
+    dd <- rbind(dd, missing_hh[, .(id, zone, type, hhid, bedrooms, quality, monthlyCost, yearBuilt, floor, microBuildingID, coordX, coordY)], fill = TRUE)
+}
+
+# > dd %>% nrow()
+# [1] 1837689
+# > nrow(hh) - nrow(dd)           
+# [1] 0
+
 
 # dwelling_zone_summary <- dd[
 #    , .(
@@ -238,26 +295,26 @@ dd <- hh[
 
 # dwelling_zone_summary %>% summary()
 ##       zone           unique_building_count unique_household_count
-##  Min.   :2.060e+10   Min.   :   1.0        Min.   :   1.0
-##  1st Qu.:2.080e+10   1st Qu.:  75.0        1st Qu.: 126.0
-##  Median :2.110e+10   Median :  98.0        Median : 166.0
-##  Mean   :2.102e+10   Mean   : 101.2        Mean   : 182.6
-##  3rd Qu.:2.121e+10   3rd Qu.: 122.0        3rd Qu.: 215.0        
-##  Max.   :2.140e+10   Max.   :1141.0        Max.   :3278.0
+##  Min.   :2.060e+10   Min.   :   1.00       Min.   :   1.0
+##  1st Qu.:2.080e+10   1st Qu.:  74.00       1st Qu.: 124.0
+##  Median :2.110e+10   Median :  97.00       Median : 165.0
+##  Mean   :2.102e+10   Mean   :  99.62       Mean   : 179.9
+##  3rd Qu.:2.121e+10   3rd Qu.: 122.00       3rd Qu.: 214.0        
+##  Max.   :2.140e+10   Max.   :1167.00       Max.   :3278.0
 
 # dd[
 #    , .(
 #        unique_household_count = uniqueN(hhid)
 #        ), by = microBuildingID
 # ] %>% summary()
-## Processed 1017392 groups out of 1017392. 100% done. Time elapsed: 40s. ETA: 0s.
-##  microBuildingID    unique_household_count
-##  Length:1017392     Min.   :  1.000
-##  Class :character   1st Qu.:  1.000
-##  Mode  :character   Median :  1.000
-##                     Mean   :  1.804
-##                     3rd Qu.:  2.000
-##                     Max.   :665.000
+##Processed 1017399 groups out of 1017399. 100% done. Time elapsed: 44s. ETA: 0s.
+## microBuildingID    unique_household_count
+## Length:1017399     Min.   :  1.000
+## Class :character   1st Qu.:  1.000
+## Mode  :character   Median :  1.000
+##                    Mean   :  1.806
+##                    3rd Qu.:  2.000
+##                    Max.   :665.000
 
 write.csv(dd, paste0('../microData/dd_', base_year, '.csv'), row.names = FALSE)
 
