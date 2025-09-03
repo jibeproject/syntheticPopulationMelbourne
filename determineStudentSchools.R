@@ -156,8 +156,8 @@ prepare_school_microdata <- function(population_students) {
                 ),
                 capacity = coalesce(Primary.Total, 0) + coalesce(Secondary.Total, 0),
                 occupancy = NA,
-                coordX = st_coordinates(geometry)[1],
-                coordY = st_coordinates(geometry)[2]
+                coordX = st_coordinates(geometry)[,1],
+                coordY = st_coordinates(geometry)[,2]
             )
     higher_education_capacity_multiplier <- 1.21
     higher_education <- enrolments_higher_education %>%
@@ -167,8 +167,8 @@ prepare_school_microdata <- function(population_students) {
                 type = "3",
                 capacity = ceiling(coalesce(TOTAL * higher_education_capacity_multiplier,0)),
                 occupancy = NA,
-                coordX = st_coordinates(geometry)[1],
-                coordY = st_coordinates(geometry)[2]
+                coordX = st_coordinates(geometry)[,1],
+                coordY = st_coordinates(geometry)[,2]
             )
     columns <- c("id", "zone", "type", "capacity", "occupancy", "coordX", "coordY")
     combined_schools <- bind_rows(
