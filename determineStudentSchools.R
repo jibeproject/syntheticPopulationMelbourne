@@ -197,6 +197,10 @@ prepare_school_microdata <- function(population_students) {
     if (!dir.exists("../microdata")) {
         dir.create("../microdata", recursive = TRUE)
     }
+
+    # Combined primary and secondary schools are currently NA in type, but should be '4'
+    combined_schools$type[is.na(combined_schools$type)] <- 4
+
     write.csv(combined_schools[columns], paste0('../microdata/ss_', base_year, '.csv'), row.names = FALSE)
 }
 
