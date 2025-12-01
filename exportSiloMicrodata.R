@@ -97,16 +97,20 @@ log_info("Preparing pp_2018 population microdata")
 # Step 1: Add occupation column to population
 ## Follows numeric typology defined at:
 ## https://github.com/jibeproject/mito/blob/01ef0b7790273d185d8b0c49da392a37043afc82/mitoCore/src/main/java/de/tum/bgu/msm/data/MitoOccupationStatus.java#L9-L17
-## and discussed in https://github.com/jibeproject/mito/issues/18
+## and discussed in https://github.com/jibeproject/mito/issues/18, but with further Toddler (occupation=0) classification at:
+## https://github.com/jibeproject/silo/blob/ea1559ae47cc78d7930442f061d0f812522bade1/siloCore/src/main/java/de/tum/bgu/msm/data/person/Occupation.java#L36-L51
+## 0 = toddler (age < 6)
 ## 1 = employed (not a student)
 ## 2 = unemployed (not employed nor a student, and aged < 67)
 ## 3 = student
 ## 4 = other (not employed nor a student, and aged >= 67)
 population <- population[
-    , occupation := fifelse(student_status == 1, 3, 
-        fifelse(is_employed == TRUE & student_status != 1, 1,
-            fifelse(is_employed != TRUE & student_status != 1 & Age < 67, 2, 4)
-        )
+    , occupation := fcase(
+        Age < 6, 0,
+        student_status == 1, 3,
+        is_employed == TRUE & student_status != 1, 1,
+        is_employed != TRUE & student_status != 1 & Age < 67, 2,
+        default = 4
     )
 ]
 
