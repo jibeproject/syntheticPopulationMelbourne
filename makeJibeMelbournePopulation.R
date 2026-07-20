@@ -71,3 +71,8 @@ assignWorkLocations(
 
 # Prepare and output final population microdata for SILO
 source('exportSiloMicrodata.R', local=TRUE);
+
+# Export demographic attributes that SILO's microdata formats have no field for
+# (education, SEIFA, student and employment status), as a linkage file joining
+# to pp_<base_year>.csv on id
+source('exportExtendedDemographics.R', local=TRUE);

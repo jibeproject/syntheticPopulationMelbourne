@@ -14,7 +14,7 @@ source("util.R")
 
 # Load project properties (includes coordinate reference system)
 properties_file <- "../project.properties"
-source(properties_file)
+sourceProperties(properties_file)
 
 # Set seed for reproducibility
 set.seed(12)

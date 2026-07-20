@@ -5,9 +5,12 @@ library(logger)
 library(data.table)
 library(sf)
 
+# load general purpose utility functions
+source("util.R")
+
 # Load project properties (includes coordinate reference system)
 properties_file <- "../project.properties"
-source(properties_file)
+sourceProperties(properties_file)
 
 
 log_info("Loading population data")

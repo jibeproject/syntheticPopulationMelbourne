@@ -2,6 +2,40 @@ suppressPackageStartupMessages(library(dplyr))
 # Suppress summarise info
 options(dplyr.summarise.inform = FALSE)
 
+# Reads a Java-style properties file (eg ../project.properties) and assigns each
+# key as a variable in the calling environment.
+#
+# This is a drop-in replacement for source(properties_file). source() only ever
+# worked by accident: it requires every value to be valid R, so bare values such
+# as `zone.id.field = SA1_7DIG16` are parsed as assignments from undefined
+# symbols and abort the whole script with "object 'SA1_7DIG16' not found".
+#
+# Values are returned as numeric where they parse as numbers, logical for
+# true/false, and character otherwise.
+sourceProperties <- function(path, envir = parent.frame()) {
+  if (!file.exists(path)) stop("Properties file not found: ", path)
+
+  lines <- trimws(readLines(path, warn = FALSE))
+  lines <- lines[nzchar(lines) & !startsWith(lines, "#") & !startsWith(lines, "!")]
+  lines <- lines[grepl("=", lines, fixed = TRUE)]
+
+  keys <- trimws(sub("=.*$", "", lines))
+  values <- trimws(sub("^[^=]*=", "", lines))
+
+  for (i in seq_along(keys)) {
+    value <- values[i]
+    numeric_value <- suppressWarnings(as.numeric(value))
+    if (!is.na(numeric_value)) {
+      value <- numeric_value
+    } else if (tolower(value) %in% c("true", "false")) {
+      value <- as.logical(toupper(value))
+    }
+    assign(keys[i], value, envir = envir)
+  }
+
+  invisible(setNames(values, keys))
+}
+
 # Probabilistically selects an index from the vector of probabilities
 selectIndexFromProbabilities <-function(vv) {
   if(is.null(vv) || is.na(vv)) return(vv)
