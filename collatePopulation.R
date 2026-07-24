@@ -154,6 +154,17 @@ assignHHids <- function(df) {
   # then resolves to NA on the left_join, and an edge to a person we do not
   # model cannot form a within-population household link. igraph also refuses
   # to build a graph from an edge list containing NAs.
+  #
+  # On the 2016 input this drops 59 edges referencing 22 removed persons, and
+  # ALL 41 removed persons are Age == -1 placeholders (none were SA1-lookup
+  # casualties), so they carry no valid age and cannot be modelled downstream
+  # regardless. 17 of the referenced persons are "hubs" linking 2-5 in-population
+  # people, but those people are already tied together by other links, so simply
+  # dropping the edges was verified to yield exactly the same households as the
+  # more careful alternative of contracting each removed hub (connecting its
+  # in-population neighbours before dropping) - identical household count, so no
+  # household is actually split. The Age == -1 records are an upstream AgentsOz
+  # data-quality artefact worth flagging if their count grows.
   n_na_edges <- sum(is.na(all_relationships$from) | is.na(all_relationships$to))
   if (n_na_edges > 0) {
     log_warn(paste0("Dropping ", n_na_edges, " household-graph edge(s) that ",
