@@ -12,6 +12,12 @@ source("util.R")
 properties_file <- "../project.properties"
 sourceProperties(properties_file)
 
+# Set seed for reproducibility, matching the determine* stages.
+# This script draws randomly three times - a building per job, a building per
+# dwelling, and a point within the zone polygon for dwellings in zones with no
+# buildings - so without a seed the exported coordinates differed on every run.
+set.seed(12)
+
 
 log_info("Loading population data")
 population <- readRDS('../output/synthetic_population/population_final.rds')

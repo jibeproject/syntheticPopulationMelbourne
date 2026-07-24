@@ -101,7 +101,7 @@ assignHHids <- function(df) {
     rename(AgentIdOld=AgentId) %>%
     mutate(AgentId=row_number()) %>%
     mutate(ChildrenIds=str_replace_all(ChildrenIds, "\\[|\\]", "")) %>%
-    mutate(RelativeIds=str_replace_all(ChildrenIds, "\\[|\\]", ""))
+    mutate(RelativeIds=str_replace_all(RelativeIds, "\\[|\\]", ""))
   
   df_ids <- df2 %>%
     dplyr::select(id=AgentId,AgentIdOld)
