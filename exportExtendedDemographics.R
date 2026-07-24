@@ -36,11 +36,11 @@ alreadyExported <- c(
     "assigned_school", "SA1_MAINCODE_2016", "hhSize", "hhCar"
 )
 
-# Deliberately withheld.
-# RelativeIds is byte-identical to ChildrenIds in population_final.rds: it is
-# assigned from ChildrenIds at collatePopulation.R:104, so it carries no
-# distinct information and would be misleading to publish as a linkage variable.
-excluded <- c("RelativeIds")
+# Nothing is withheld. (RelativeIds was previously excluded because a typo at
+# collatePopulation.R:104 assigned it from ChildrenIds, making it byte-identical
+# and therefore misleading to publish. That typo was fixed in commit 7047a21, so
+# RelativeIds now carries genuine relative links and is exported below.)
+excluded <- character(0)
 
 # Attributes to publish, in reporting order.
 extendedColumns <- c(
@@ -64,7 +64,8 @@ extendedColumns <- c(
     "PartnerId",
     "MotherId",
     "FatherId",
-    "ChildrenIds"      # comma-separated AgentIds
+    "ChildrenIds",     # comma-separated AgentIds
+    "RelativeIds"      # comma-separated AgentIds (other relatives in household)
 )
 
 # Fail loudly if an expected attribute has disappeared upstream.

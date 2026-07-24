@@ -146,9 +146,24 @@ assignHHids <- function(df) {
     df_partner   %>% dplyr::select(x=AgentId,y=PartnerId  ) %>% reorderColumns(),
     df_mother    %>% dplyr::select(x=AgentId,y=MotherId   ) %>% reorderColumns(),
     df_father    %>% dplyr::select(x=AgentId,y=FatherId   ) %>% reorderColumns()
-  ) %>%
+  )
+
+  # Drop edges that reference a person absent from the cleaned population. A
+  # PartnerId/MotherId/FatherId/RelativeIds/ChildrenIds can point at someone
+  # removed by the Age>=0 filter or the SA1 inner_join above; that reference
+  # then resolves to NA on the left_join, and an edge to a person we do not
+  # model cannot form a within-population household link. igraph also refuses
+  # to build a graph from an edge list containing NAs.
+  n_na_edges <- sum(is.na(all_relationships$from) | is.na(all_relationships$to))
+  if (n_na_edges > 0) {
+    log_warn(paste0("Dropping ", n_na_edges, " household-graph edge(s) that ",
+                    "reference persons not present in the cleaned population"))
+    all_relationships <- all_relationships %>%
+      filter(!is.na(from) & !is.na(to))
+  }
+  all_relationships <- all_relationships %>%
     distinct()
-  
+
   # Ids of people with families
   all_relationships_ids <- base::unique(c(all_relationships$from,all_relationships$to))
   no_relationship_ids <- df2 %>%
